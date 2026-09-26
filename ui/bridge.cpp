@@ -29,13 +29,20 @@ Bridge::Bridge(QObject* parent)
                 "../lib/omarchy-software/omarchy-software-core");
     m_worker.setProgram(QFileInfo::exists(adjacent) ? adjacent : installed);
     m_worker.setProcessChannelMode(QProcess::SeparateChannels);
-    m_worker.start();
 
     // Worker writes JSON responses on stdout; tracing logs on stderr.
     connect(&m_worker, &QProcess::readyReadStandardOutput, this, &Bridge::receive);
     // Drain stderr so the OS pipe buffer doesn't fill and stall the worker.
     connect(&m_worker, &QProcess::readyReadStandardError, this, [this]() {
         m_worker.readAllStandardError();
+    });
+    connect(&m_worker, &QProcess::started, this, [this]() {
+        while (!m_deferredRequests.isEmpty()) {
+            const auto request = m_deferredRequests.dequeue();
+            const QJsonDocument doc(QJsonObject::fromVariantMap(request));
+            m_worker.write(doc.toJson(QJsonDocument::Compact));
+            m_worker.write("\n");
+        }
     });
     connect(&m_worker, &QProcess::finished, this, [this](int code, QProcess::ExitStatus) {
         if (code != 0) {
@@ -49,6 +56,7 @@ Bridge::Bridge(QObject* parent)
     m_timer.start();
 
     m_timeout.setSingleShot(true);
+    m_worker.start();
 }
 
 Bridge::~Bridge() {
@@ -105,6 +113,13 @@ void Bridge::handleResponse(const QVariantMap& resp) {
         m_busy = false;
         emit busyChanged();
         auto results = resp.value("results").toList();
+        m_categories.clear();
+        for (const auto& item : resp.value("categories").toList())
+            m_categories.append(item.toString());
+        m_repositories.clear();
+        for (const auto& item : resp.value("repositories").toList())
+            m_repositories.append(item.toString());
+        emit searchOptionsChanged();
         QVariantList rows;
         for (const auto& r : results) {
             auto m = r.toMap();
@@ -113,7 +128,7 @@ void Bridge::handleResponse(const QVariantMap& resp) {
             rows.append(m);
         }
         m_rows.replace(rows);
-        m_status = QString::number(results.size()) + " packages found";
+        m_status = QString::number(results.size()) + " available packages";
         emit statusChanged();
         return;
     }
@@ -135,11 +150,24 @@ void Bridge::handleResponse(const QVariantMap& resp) {
     }
 
     if (kind == "updates") {
+        m_busy = false;
+        emit busyChanged();
         auto repos = resp.value("repos").toList();
         auto aur = resp.value("aur").toList();
         int total = resp.value("total").toInt();
+        QVariantList rows;
+        for (const auto& item : repos + aur) {
+            auto package = item.toMap();
+            package["size_human"] = formatSize(package.value("size").toLongLong());
+            rows.append(package);
+        }
+        m_rows.replace(rows);
         emit updatesAvailable(total);
         m_status = QString::number(total) + " updates available";
+        if (m_refreshJustCompleted) {
+            m_status += " · databases refreshed";
+            m_refreshJustCompleted = false;
+        }
         emit statusChanged();
         return;
     }
@@ -154,20 +182,17 @@ void Bridge::handleResponse(const QVariantMap& resp) {
     if (kind == "commit_result") {
         m_busy = false;
         emit busyChanged();
+        m_selected.clear();
+        emit selectionChanged();
         emit operationFinished(resp.value("output").toString());
         // Refresh
         if (m_page == "installed") {
             loadInstalled();
         } else if (m_page == "updates") {
             checkUpdates();
+        } else if (m_page == "browse") {
+            search(m_searchQuery, m_searchSource, m_searchRepository, m_searchCategory);
         }
-        return;
-    }
-
-    if (kind == "cache_cleaned") {
-        emit operationFinished(
-            "Freed " + formatSize(resp.value("freed_bytes").toLongLong()) +
-            " (" + QString::number(resp.value("freed_units").toInt()) + " files)");
         return;
     }
 
@@ -179,14 +204,21 @@ void Bridge::handleResponse(const QVariantMap& resp) {
     }
 
     if (kind == "action") {
+        const bool refreshing = m_status.startsWith("Refreshing");
+        m_busy = false;
+        emit busyChanged();
         auto results = resp.value("results").toList();
         for (const auto& r : results) {
             auto m = r.toMap();
             if (m.value("ok").toBool()) {
-                // no-op, already handled in specific cases above
+                message(m.value("message").toString());
             } else {
                 emit error(m.value("message").toString());
             }
+        }
+        if (m_page == "updates" && refreshing) {
+            m_refreshJustCompleted = true;
+            checkUpdates();
         }
     }
 }
@@ -200,6 +232,10 @@ void Bridge::applyTheme(const QVariantMap& colors) {
 }
 
 bool Bridge::send(const QVariantMap& req) {
+    if (m_worker.state() == QProcess::Starting) {
+        m_deferredRequests.enqueue(req);
+        return true;
+    }
     if (m_worker.state() != QProcess::Running) return false;
     QJsonDocument doc(QJsonObject::fromVariantMap(req));
     m_worker.write(doc.toJson(QJsonDocument::Compact));
@@ -236,11 +272,54 @@ void Bridge::setPage(const QString& page) {
     emit preferencesChanged();
 }
 
-void Bridge::search(const QString& query, const QString& source) {
-    if (query.isEmpty()) { m_rows.replace({}); return; }
+void Bridge::setSelected(const QVariantList& packages) {
+    m_selected = packages;
+    emit selectionChanged();
+}
+
+void Bridge::stageSelectedRemoval() {
+    QStringList blocked;
+    for (const auto& value : m_selected) {
+        const QString name = value.toString();
+        for (const auto& row : m_rows.rows) {
+            const auto package = row.toMap();
+            if (package.value("name").toString() == name
+                && package.value("protected").toBool()) {
+                blocked.append(name);
+                break;
+            }
+        }
+    }
+    if (!blocked.isEmpty()) {
+        emit error("Protected packages cannot be removed: " + blocked.join(", "));
+        return;
+    }
+    if (!m_selected.isEmpty()) queueRemove(m_selected);
+}
+
+void Bridge::search(const QString& query, const QString& source,
+                    const QString& repository, const QString& category) {
+    m_searchQuery = query;
+    m_searchSource = source;
+    m_searchRepository = repository;
+    m_searchCategory = category;
+    if (query.isEmpty() && source == "aur") {
+        m_rows.replace({});
+        m_busy = false;
+        emit busyChanged();
+        m_status = "Search for a package to browse the AUR";
+        emit statusChanged();
+        return;
+    }
     m_busy = true; emit busyChanged();
     m_status = "Searching…"; emit statusChanged();
-    send(QVariantMap{{"op", "search"}, {"query", query}, {"source", source}});
+    send(QVariantMap{
+        {"op", "search"},
+        {"query", query},
+        {"source", source},
+        {"repository", repository},
+        {"category", category}
+    });
 }
 
 void Bridge::loadInstalled(const QString& filter, const QString& sort, bool reverse) {
@@ -257,6 +336,12 @@ void Bridge::checkUpdates() {
     m_busy = true; emit busyChanged();
     m_status = "Checking for updates…"; emit statusChanged();
     send(QVariantMap{{"op", "updates"}});
+}
+
+void Bridge::previewUpdates() {
+    m_busy = true; emit busyChanged();
+    m_status = "Preparing update review…"; emit statusChanged();
+    send(QVariantMap{{"op", "preview_updates"}});
 }
 
 void Bridge::refresh() {
@@ -308,11 +393,6 @@ void Bridge::cancel() {
 
 void Bridge::cancelPreview() {
     send(QVariantMap{{"op", "cancel_preview"}});
-}
-
-void Bridge::cleanCache(const QString& mode) {
-    m_busy = true; emit busyChanged();
-    send(QVariantMap{{"op", "cache_clean"}, {"mode", mode}});
 }
 
 void Bridge::floatPanel(int width, int height) {

@@ -1,6 +1,6 @@
 //! omarchy-software-core — Omarchy Software
 //! Command-line worker: JSON over stdin/stdout.
-//! Started by the Qt GUI; the two processes communicate over a Unix socket.
+//! Started by the Qt GUI; the two processes communicate over newline-delimited JSON on stdin/stdout.
 
 mod alpm_db;
 mod aur;
@@ -27,6 +27,7 @@ fn main() {
     };
 
     let theme = theme::Theme::load();
+    let config = config::Config::load();
 
     if let Err(e) = process::install_cancellation() {
         eprintln!("Cannot install worker shutdown handler: {e}");
@@ -43,7 +44,7 @@ fn main() {
         };
 
         let response = match serde_json::from_str::<Value>(&line) {
-            Ok(req) => handle(&req, &mut db, &theme, &mut cache),
+            Ok(req) => handle(&req, &mut db, &theme, &config, &mut cache),
             Err(_) => json!({"kind": "error", "message": "Malformed request"}),
         };
 
@@ -55,19 +56,28 @@ fn main() {
 
 // ── Request routing ─────────────────────────────────────────────────────────
 
-fn handle(req: &Value, db: &mut DbHandle, theme: &theme::Theme, cache: &mut Cache) -> Value {
+fn handle(
+    req: &Value,
+    db: &mut DbHandle,
+    theme: &theme::Theme,
+    config: &config::Config,
+    cache: &mut Cache,
+) -> Value {
     match req["op"].as_str().unwrap_or("") {
         "search" => {
             let query = req["query"].as_str().unwrap_or("");
             let source = req["source"].as_str().unwrap_or("all");
-            search(db, query, source)
+            let repository = req["repository"].as_str().unwrap_or("");
+            let category = req["category"].as_str().unwrap_or("all");
+            search(db, query, source, repository, category, config)
         }
-        "installed" => installed(db, req),
+        "installed" => installed(db, req, config),
         "updates" => updates(db, cache),
         "refresh" => refresh(db, cache),
         "preview_install" => preview_install(db, req),
-        "preview_remove" => preview_remove(db, req),
-        "commit" => commit(db, req),
+        "preview_updates" => preview_updates(db),
+        "preview_remove" => preview_remove(db, req, config),
+        "commit" => commit(db, req, config),
         "cancel" => {
             db.interrupt();
             json!({"kind": "action", "results": [{"ok": true, "message": "Operation cancelled"}]})
@@ -76,7 +86,6 @@ fn handle(req: &Value, db: &mut DbHandle, theme: &theme::Theme, cache: &mut Cach
             cache.preview = None;
             json!({"kind": "action", "results": [{"ok": true, "message": "Preview cleared"}]})
         }
-        "cache_clean" => cache_clean(req),
         "aur_info" => aur_info(req),
         "theme" => json!({
             "kind": "theme",
@@ -91,11 +100,33 @@ fn handle(req: &Value, db: &mut DbHandle, theme: &theme::Theme, cache: &mut Cach
 
 // ── Operations ───────────────────────────────────────────────────────────────
 
-fn search(db: &DbHandle, query: &str, source: &str) -> Value {
+fn search(
+    db: &DbHandle,
+    query: &str,
+    source: &str,
+    repository: &str,
+    category: &str,
+    config: &config::Config,
+) -> Value {
     let mut results: Vec<Value> = Vec::new();
+    // Empty queries browse sync repository packages. The AUR API requires a
+    // meaningful search term, so it is queried only for non-empty searches.
+    let mut categories = Vec::new();
 
     if source != "aur" {
-        for pkg in db.search_repo(query) {
+        let (packages, package_categories) = db.search_repo(query, repository);
+        categories = package_categories;
+
+        for mut pkg in packages {
+            let category_matches = match category {
+                "all" | "" => true,
+                "Uncategorized" => pkg.groups.is_empty(),
+                selected => pkg.groups.iter().any(|group| group == selected),
+            };
+            if !category_matches {
+                continue;
+            }
+            pkg.protected = is_protected(config, &pkg.name);
             results.push(json!({
                 "name": pkg.name,
                 "version": pkg.version,
@@ -103,41 +134,73 @@ fn search(db: &DbHandle, query: &str, source: &str) -> Value {
                 "source": "repo",
                 "repo": pkg.repo,
                 "installed": pkg.installed,
+                "protected": pkg.protected,
+                "groups": pkg.groups,
                 "size": pkg.size,
             }));
         }
     }
 
-    if source != "repo" {
+    if source != "repo"
+        && !query.is_empty()
+        && repository.is_empty()
+        && (category == "all" || category.is_empty())
+    {
         // AUR search is blocking — run in a thread pool to avoid blocking
         if let Ok(Ok(aur_results)) = std::thread::scope(|s| {
             s.spawn(|| aur::search(query)).join()
         }) {
             for pkg in aur_results {
+                let installed = db.is_installed(&pkg.name);
                 results.push(json!({
                     "name": pkg.name,
                     "version": pkg.version,
                     "description": pkg.description,
                     "source": "aur",
                     "repo": "AUR",
-                    "installed": false,
+                    "installed": installed,
+                    "protected": is_protected(config, &pkg.name),
+                    "groups": [],
                     "votes": pkg.votes,
                 }));
             }
         }
     }
 
-    json!({"kind": "search_results", "results": results})
+    results.sort_by(|left, right| {
+        let left_source = left["source"].as_str().unwrap_or("");
+        let right_source = right["source"].as_str().unwrap_or("");
+        left["name"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(right["name"].as_str().unwrap_or(""))
+            .then_with(|| left["repo"].as_str().unwrap_or("").cmp(right["repo"].as_str().unwrap_or("")))
+            .then_with(|| left["version"].as_str().unwrap_or("").cmp(right["version"].as_str().unwrap_or("")))
+            .then_with(|| left_source.cmp(right_source))
+    });
+
+    json!({
+        "kind": "search_results",
+        "results": results,
+        "categories": categories,
+        "repositories": db.repository_names(),
+    })
 }
 
-fn installed(db: &DbHandle, req: &Value) -> Value {
+fn installed(db: &DbHandle, req: &Value, config: &config::Config) -> Value {
     let filter = req["filter"].as_str().unwrap_or("all");
     let sort = req["sort"].as_str().unwrap_or("name");
     let reverse = req["reverse"].as_bool().unwrap_or(false);
 
     let packages = db.installed_packages(filter, sort, reverse);
     let total_size: u64 = packages.iter().map(|p| p.size).sum();
-    let package_values: Vec<Value> = packages.into_iter().map(|p| serde_json::to_value(p).unwrap()).collect();
+    let package_values: Vec<Value> = packages
+        .into_iter()
+        .map(|mut package| {
+            package.protected = is_protected(config, &package.name);
+            serde_json::to_value(package).unwrap()
+        })
+        .collect();
 
     json!({
         "kind": "installed",
@@ -192,6 +255,17 @@ fn preview_install(db: &mut DbHandle, req: &Value) -> Value {
         return json!({"kind": "error", "message": "No packages specified"});
     }
 
+    if sources.len() != packages.len() {
+        return json!({"kind": "error", "message": "Package source information is incomplete"});
+    }
+    let unsupported: Vec<_> = packages.iter().zip(&sources)
+        .filter(|(_, source)| source.as_str() != "repo")
+        .map(|(name, _)| name.clone()).collect();
+    if !unsupported.is_empty() {
+        return json!({"kind": "error", "message": format!(
+            "Cannot install unsupported package sources: {}", unsupported.join(", "))});
+    }
+
     let mut preview = transaction::Preview::new();
 
     let repo_pkgs: Vec<String> = packages
@@ -207,32 +281,37 @@ fn preview_install(db: &mut DbHandle, req: &Value) -> Value {
         }
     }
 
-    let aur_pkgs: Vec<String> = packages
-        .iter()
-        .zip(sources.iter())
-        .filter(|(_, s)| s.as_str() == "aur")
-        .map(|(n, _)| n.clone())
-        .collect();
-
-    if !aur_pkgs.is_empty() {
-        if let Ok(Ok(aur_info)) = std::thread::scope(|s| {
-            s.spawn(|| aur::info_by_name(&aur_pkgs)).join()
-        }) {
-            for pkg in aur_info {
-                preview.add_install_aur(&pkg);
-            }
-        }
-    }
-
     json!({"kind": "preview", "preview": serde_json::to_value(&preview).unwrap()})
 }
 
-fn preview_remove(db: &mut DbHandle, req: &Value) -> Value {
+fn preview_updates(db: &DbHandle) -> Value {
+    let (packages, _) = db.check_updates();
+    if packages.is_empty() {
+        return json!({"kind": "error", "message": "No repository updates are available"});
+    }
+    let mut preview = transaction::Preview::new();
+    preview.system_upgrade = true;
+    preview.install = packages;
+    json!({"kind": "preview", "preview": serde_json::to_value(&preview).unwrap()})
+}
+
+fn preview_remove(db: &mut DbHandle, req: &Value, config: &config::Config) -> Value {
     let packages: Vec<String> = serde_json::from_value(req["packages"].clone())
         .unwrap_or_default();
 
     if packages.is_empty() {
         return json!({"kind": "error", "message": "No packages specified"});
+    }
+    let blocked: Vec<_> = packages
+        .iter()
+        .filter(|name| is_protected(config, name))
+        .cloned()
+        .collect();
+    if !blocked.is_empty() {
+        return json!({
+            "kind": "error",
+            "message": format!("Protected packages cannot be removed: {}", blocked.join(", ")),
+        });
     }
 
     let mut preview = transaction::Preview::new();
@@ -240,10 +319,23 @@ fn preview_remove(db: &mut DbHandle, req: &Value) -> Value {
         return json!({"kind": "error", "message": e});
     }
 
+    let blocked_cascade: Vec<_> = preview
+        .all_removing()
+        .iter()
+        .filter(|package| is_protected(config, &package.name))
+        .map(|package| package.name.clone())
+        .collect();
+    if !blocked_cascade.is_empty() {
+        return json!({
+            "kind": "error",
+            "message": format!("Removal would include protected packages: {}", blocked_cascade.join(", ")),
+        });
+    }
+
     json!({"kind": "preview", "preview": serde_json::to_value(&preview).unwrap()})
 }
 
-fn commit(db: &mut DbHandle, req: &Value) -> Value {
+fn commit(db: &mut DbHandle, req: &Value, config: &config::Config) -> Value {
     let preview_map = match req["preview"].as_object() {
         Some(m) => m.clone(),
         _ => return json!({"kind": "error", "message": "Invalid preview"}),
@@ -254,22 +346,27 @@ fn commit(db: &mut DbHandle, req: &Value) -> Value {
         Err(e) => return json!({"kind": "error", "message": format!("Cannot parse preview: {e}")}),
     };
 
+    let blocked: Vec<_> = preview
+        .all_removing()
+        .into_iter()
+        .filter(|package| is_protected(config, &package.name))
+        .map(|package| package.name.clone())
+        .collect();
+    if !blocked.is_empty() {
+        return json!({
+            "kind": "error",
+            "message": format!("Protected packages cannot be removed: {}", blocked.join(", ")),
+        });
+    }
+
     match db.commit(&preview) {
         Ok(out) => json!({"kind": "commit_result", "ok": true, "output": out}),
         Err(e) => json!({"kind": "error", "message": e}),
     }
 }
 
-fn cache_clean(req: &Value) -> Value {
-    let mode = req["mode"].as_str().unwrap_or("keep_last");
-    match transaction::clean_cache(mode) {
-        Ok((freed, units)) => json!({
-            "kind": "cache_cleaned",
-            "freed_bytes": freed,
-            "freed_units": units,
-        }),
-        Err(e) => json!({"kind": "error", "message": e}),
-    }
+fn is_protected(config: &config::Config, name: &str) -> bool {
+    config.protected_packages.iter().any(|protected| protected == name)
 }
 
 fn aur_info(req: &Value) -> Value {

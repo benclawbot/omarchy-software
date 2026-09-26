@@ -1,51 +1,61 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "Theme.js" as T
 
 Item {
     id: root
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: T.space_lg
-        spacing: T.space_md
+        anchors.margins: theme.space_xl
+        spacing: theme.space_lg
 
         // Page header
         RowLayout {
             Layout.fillWidth: true
-            spacing: T.space_md
+            spacing: theme.space_md
 
             ColumnLayout {
-                spacing: T.space_xs
+                spacing: theme.space_sm
                 Layout.fillWidth: true
 
                 Text {
                     text: "Updates"
-                    color: T.foreground
-                    font.family: T.font_family
-                    font.pixelSize: T.headline_size
-                    font.weight: T.weight_bold
+                    color: theme.foreground
+                    font.family: theme.font_family
+                    font.pixelSize: theme.title_size
+                    font.weight: theme.weight_bold
                 }
                 Text {
                     text: "Available upgrades for your system"
-                    color: T.foreground_muted
-                    font.family: T.font_family
-                    font.pixelSize: T.small_size
+                    color: theme.foreground_muted
+                    font.family: theme.font_family
+                    font.pixelSize: theme.body_size
                 }
             }
 
             StyledButton {
                 text: "Refresh"
                 variant: "secondary"
+                onClicked: bridge.refresh()
             }
             StyledButton {
                 text: "Update all"
                 variant: "primary"
+                enabled: bridge.rows && bridge.rows.count > 0 && !bridge.busy
+                onClicked: bridge.previewUpdates()
             }
         }
 
         PackageList {
+            model: bridge.rows
+            loading: bridge.busy || false
+            emptySymbol: "✓"
+            emptyTitle: bridge.busy ? "Checking for updates" : "You're up to date"
+            emptyMessage: bridge.busy
+                ? "Comparing installed packages with enabled repositories."
+                : "No package updates are available."
+            emptyAccent: theme.success
             Layout.fillWidth: true
             Layout.fillHeight: true
         }

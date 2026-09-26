@@ -93,6 +93,6 @@ const PROTECTED_LIST: &[&str] = &[
     "grep",
     "sed",
     "tar",
-    " gzip",
+    "gzip",
     "pacman-mirrors", // CachyOS
 ];

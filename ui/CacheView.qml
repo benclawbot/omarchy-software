@@ -1,66 +1,65 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "Theme.js" as T
 
 Item {
     id: root
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: T.space_lg
-        spacing: T.space_md
+        anchors.margins: theme.space_xl
+        spacing: theme.space_lg
 
         // Page header
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: T.space_xs
+            spacing: theme.space_sm
 
             Text {
                 text: "Package cache"
-                color: T.foreground
-                font.family: T.font_family
-                font.pixelSize: T.headline_size
-                font.weight: T.weight_bold
+                color: theme.foreground
+                font.family: theme.font_family
+                font.pixelSize: theme.title_size
+                font.weight: theme.weight_bold
             }
             Text {
                 text: "Downloaded .pkg.tar files kept by pacman"
-                color: T.foreground_muted
-                font.family: T.font_family
-                font.pixelSize: T.small_size
+                color: theme.foreground_muted
+                font.family: theme.font_family
+                font.pixelSize: theme.body_size
             }
         }
 
         // Stats card
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 84
-            radius: T.radius_lg
-            color: T.surface
+            implicitHeight: 96
+            radius: theme.radius_lg
+            color: theme.surface
             border.width: 1
-            border.color: T.divider
+            border.color: theme.divider
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: T.space_lg
-                spacing: T.space_xl
+                anchors.margins: theme.space_lg
+                spacing: theme.space_xl
 
                 ColumnLayout {
                     spacing: 2
                     Layout.fillWidth: true
                     Text {
                         text: "Cached packages"
-                        color: T.foreground_subtle
-                        font.family: T.font_family
-                        font.pixelSize: T.caption_size
-                        font.weight: T.weight_bold
+                        color: theme.foreground_muted
+                        font.family: theme.font_family
+                        font.pixelSize: theme.caption_size
+                        font.weight: theme.weight_bold
                     }
                     Text {
                         text: "—"
-                        color: T.foreground
-                        font.family: T.font_family
-                        font.pixelSize: T.title_size
-                        font.weight: T.weight_bold
+                        color: theme.foreground
+                        font.family: theme.font_family
+                        font.pixelSize: theme.title_size
+                        font.weight: theme.weight_bold
                     }
                 }
 
@@ -69,23 +68,23 @@ Item {
                     Layout.fillWidth: true
                     Text {
                         text: "Disk usage"
-                        color: T.foreground_subtle
-                        font.family: T.font_family
-                        font.pixelSize: T.caption_size
-                        font.weight: T.weight_bold
+                        color: theme.foreground_muted
+                        font.family: theme.font_family
+                        font.pixelSize: theme.caption_size
+                        font.weight: theme.weight_bold
                     }
                     Text {
                         text: "—"
-                        color: T.foreground
-                        font.family: T.font_family
-                        font.pixelSize: T.title_size
-                        font.weight: T.weight_bold
+                        color: theme.foreground
+                        font.family: theme.font_family
+                        font.pixelSize: theme.title_size
+                        font.weight: theme.weight_bold
                     }
                 }
 
                 ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
-                    spacing: T.space_sm
+                    spacing: theme.space_sm
 
                     StyledButton {
                         text: "Keep last 3"
@@ -100,6 +99,10 @@ Item {
         }
 
         PackageList {
+            emptySymbol: "✓"
+            emptyTitle: "No cached packages"
+            emptyMessage: "Your package cache is empty."
+            emptyAccent: theme.success
             Layout.fillWidth: true
             Layout.fillHeight: true
         }

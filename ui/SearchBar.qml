@@ -1,67 +1,69 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "Theme.js" as T
 
 Rectangle {
     id: root
     color: "transparent"
-    implicitHeight: T.input_height
+    implicitHeight: theme.input_height
 
     property alias text: input.text
     property alias placeholder: input.placeholderText
-    property string source: "all"  // "all" | "repo" | "aur" | "cachyos"
+    property string source: "all"  // all sources | repositories | AUR
 
-    signal search(string query)
-    signal sourceChanged(string source)
+    signal queryChanged(string query)
+    signal filterChanged(string filter)
+
+    onSourceChanged: filterChanged(source)
 
     RowLayout {
         anchors.fill: parent
-        spacing: T.space_md
+        spacing: theme.space_md
 
         // Search input
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: T.input_height
-            radius: T.radius_md
-            color: T.surface
+            Layout.preferredHeight: theme.input_height
+            radius: theme.radius_md
+            color: theme.surface
             border.width: input.activeFocus ? 1 : 0
-            border.color: T.accent
+            border.color: theme.accent
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: T.space_md
-                anchors.rightMargin: T.space_md
-                spacing: T.space_sm
+                anchors.leftMargin: theme.space_md
+                anchors.rightMargin: theme.space_md
+                spacing: theme.space_sm
 
                 Text {
                     text: "⌕"
-                    color: T.foreground_dim
-                    font.family: T.font_family
-                    font.pixelSize: T.body_size
+                    color: theme.foreground_dim
+                    font.family: theme.font_family
+                    font.pixelSize: theme.body_size
                 }
 
                 TextField {
                     id: input
                     Layout.fillWidth: true
                     placeholderText: "Search packages…"
-                    placeholderTextColor: T.foreground_subtle
+                    placeholderTextColor: theme.foreground_subtle
                     background: Item {}  // strip default
-                    color: T.foreground
-                    font.family: T.font_family
-                    font.pixelSize: T.body_size
+                    color: theme.foreground
+                    font.family: theme.font_family
+                    font.pixelSize: theme.body_size
                     selectByMouse: true
-                    onAccepted: root.search(text)
+                    onAccepted: root.queryChanged(text)
+                    onTextChanged: root.queryChanged(text)
 
                     Keys.onEscapePressed: text = ""
                 }
 
                 Text {
-                    visible: text.length > 0
+                    visible: input.text.length > 0
                     text: "✕"
-                    color: T.foreground_dim
-                    font.family: T.font_family
-                    font.pixelSize: T.body_size
+                    color: theme.foreground_dim
+                    font.family: theme.font_family
+                    font.pixelSize: theme.body_size
                     MouseArea {
                         anchors.fill: parent
                         anchors.margins: -4
@@ -76,25 +78,19 @@ Rectangle {
         StyledChip {
             text: "All"
             selected: root.source === "all"
-            onClicked: { root.source = "all"; root.sourceChanged("all") }
+            onClicked: root.source = "all"
         }
         StyledChip {
-            text: "Repo"
-            accent: T.source_repo
+            text: "Repos"
+            accent: theme.source_repo
             selected: root.source === "repo"
-            onClicked: { root.source = "repo"; root.sourceChanged("repo") }
+            onClicked: root.source = "repo"
         }
         StyledChip {
             text: "AUR"
-            accent: T.source_aur
+            accent: theme.source_aur
             selected: root.source === "aur"
-            onClicked: { root.source = "aur"; root.sourceChanged("aur") }
-        }
-        StyledChip {
-            text: "CachyOS"
-            accent: T.source_cachyos
-            selected: root.source === "cachyos"
-            onClicked: { root.source = "cachyos"; root.sourceChanged("cachyos") }
+            onClicked: root.source = "aur"
         }
     }
 }

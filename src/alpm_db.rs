@@ -9,6 +9,8 @@
 
 use alpm::{Alpm, Package, PackageReason};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+use std::process::Command;
 
 pub struct DbHandle {
     alpm: Alpm,
@@ -19,8 +21,29 @@ impl DbHandle {
         let alpm =
             Alpm::new("/", "/var/lib/pacman").map_err(|e| format!("Failed to create alpm: {e}"))?;
 
-        for name in ["core", "extra", "community", "multilib"] {
-            alpm.register_syncdb(name, alpm::SigLevel::NONE)
+        let repositories = Command::new("pacman-conf")
+            .arg("--repo-list")
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| {
+                String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .filter(|names| !names.is_empty())
+            .unwrap_or_else(|| {
+                ["core", "extra", "community", "multilib"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect()
+            });
+
+        for name in repositories {
+            alpm.register_syncdb(name.as_bytes(), alpm::SigLevel::NONE)
                 .map_err(|e| format!("Failed to register {name}: {e}"))?;
         }
 
@@ -34,22 +57,56 @@ impl DbHandle {
 
     // ── Search ───────────────────────────────────────────────────────────────
 
-    pub fn search_repo(&self, query: &str) -> Vec<PackageInfo> {
+    pub fn search_repo(&self, query: &str, repository: &str) -> (Vec<PackageInfo>, Vec<String>) {
         let query_lower = query.to_lowercase();
         let mut results: Vec<PackageInfo> = Vec::new();
+        let mut categories = BTreeSet::new();
+        let mut has_ungrouped = false;
+        let local = self.alpm.localdb();
 
         for db in self.alpm.syncdbs().iter() {
+            if !repository.is_empty() && db.name() != repository {
+                continue;
+            }
             for pkg in db.pkgs().iter() {
-                if pkg.name().to_lowercase().contains(&query_lower)
+                for group in pkg.groups().iter() {
+                    categories.insert(group.to_string());
+                }
+                has_ungrouped |= pkg.groups().is_empty();
+
+                if query.is_empty() || pkg.name().to_lowercase().contains(&query_lower)
+                    || pkg.version().to_lowercase().contains(&query_lower)
                     || pkg.desc().unwrap_or("").to_lowercase().contains(&query_lower)
                 {
-                    results.push(PkgFromAlpm(pkg).into());
+                    let mut info: PackageInfo = PkgFromAlpm(pkg).into();
+                    info.installed = local.pkg(pkg.name().as_bytes()).is_ok();
+                    results.push(info);
                 }
             }
         }
 
-        results.sort_by(|a, b| a.name.cmp(&b.name));
-        results
+        results.sort_by(|a, b| {
+            a.name
+                .cmp(&b.name)
+                .then_with(|| a.repo.cmp(&b.repo))
+                .then_with(|| a.version.cmp(&b.version))
+        });
+        if has_ungrouped {
+            categories.insert("Uncategorized".to_string());
+        }
+        (results, categories.into_iter().collect())
+    }
+
+    pub fn repository_names(&self) -> Vec<String> {
+        self.alpm
+            .syncdbs()
+            .iter()
+            .map(|db| db.name().to_string())
+            .collect()
+    }
+
+    pub fn is_installed(&self, name: &str) -> bool {
+        self.alpm.localdb().pkg(name.as_bytes()).is_ok()
     }
 
     // ── Installed packages ────────────────────────────────────────────────────
@@ -75,7 +132,11 @@ impl DbHandle {
                     _ => true,
                 }
             })
-            .map(|pkg| PkgFromAlpm(pkg).into())
+            .map(|pkg| {
+                let mut info: PackageInfo = PkgFromAlpm(pkg).into();
+                info.installed = true;
+                info
+            })
             .collect();
 
         match sort {
@@ -112,18 +173,15 @@ impl DbHandle {
     // ── Refresh databases ────────────────────────────────────────────────────
 
     pub fn refresh(&mut self) -> Result<String, String> {
-        // alpm v5: update is on AlpmList<DbMut>, not on individual DbMut
-        let syncdbs = self.alpm.syncdbs_mut();
-        match syncdbs.update(true) {
-            Ok(_) => {
-                let names: Vec<String> = self.alpm.syncdbs().iter().map(|d| d.name().to_string()).collect();
-                if names.is_empty() {
-                    Ok("Already up to date".into())
-                } else {
-                    Ok(names.join(", ") + " refreshed")
-                }
-            }
-            Err(e) => Err(format!("Refresh failed: {e}")),
+        // Repository databases are system-owned. Let pacman acquire its normal
+        // lock and run through polkit instead of attempting a user-owned libalpm
+        // update that fails with a database lock/permission error.
+        let output = privileged_pacman(&["-Sy", "--noconfirm"])?;
+        if output.status.success() {
+            self.reload()?;
+            Ok("Package databases refreshed".into())
+        } else {
+            Err(command_error("Database refresh failed", &output))
         }
     }
 
@@ -136,7 +194,7 @@ impl DbHandle {
         preview: &mut super::transaction::Preview,
     ) -> Result<(), String> {
         self.alpm
-            .trans_init(alpm::TransFlag::NO_LOCK)
+            .trans_init(alpm::TransFlag::NO_LOCK | alpm::TransFlag::CASCADE)
             .map_err(|e| e.to_string())?;
 
         for name in packages {
@@ -145,11 +203,17 @@ impl DbHandle {
                 .syncdbs()
                 .iter()
                 .find_map(|db| db.pkg(name.as_bytes()).ok())
-                .ok_or_else(|| format!("Package '{name}' not found in repositories"))?;
+                .ok_or_else(|| format!("Package '{name}' not found in repositories"));
+            let pkg = match pkg {
+                Ok(pkg) => pkg,
+                Err(error) => { self.alpm.trans_release().ok(); return Err(error); }
+            };
 
-            self.alpm
-                .trans_add_pkg(pkg)
-                .map_err(|e| e.to_string())?;
+            if let Err(error) = self.alpm.trans_add_pkg(pkg) {
+                let message = error.to_string();
+                self.alpm.trans_release().ok();
+                return Err(message);
+            }
             preview.add_install_repo(&PkgFromAlpm(pkg).into());
         }
 
@@ -184,11 +248,17 @@ impl DbHandle {
                 .alpm
                 .localdb()
                 .pkg(name.as_bytes())
-                .map_err(|_| format!("Package '{name}' is not installed"))?;
+                .map_err(|_| format!("Package '{name}' is not installed"));
+            let pkg = match pkg {
+                Ok(pkg) => pkg,
+                Err(error) => { self.alpm.trans_release().ok(); return Err(error); }
+            };
 
-            self.alpm
-                .trans_remove_pkg(&pkg)
-                .map_err(|e| e.to_string())?;
+            if let Err(error) = self.alpm.trans_remove_pkg(&pkg) {
+                let message = error.to_string();
+                self.alpm.trans_release().ok();
+                return Err(message);
+            }
             preview.remove.push(PkgFromAlpm(&pkg).into());
         }
 
@@ -198,13 +268,15 @@ impl DbHandle {
         }
 
         let local = self.alpm.localdb();
-        let cascade: Vec<_> = self
-            .alpm
-            .trans_remove()
-            .iter()
-            .filter(|p| !packages.contains(&p.name().to_string()))
-            .map(|p| PkgFromAlpm(p).into())
-            .collect();
+        let removal_names: BTreeSet<String> = self.alpm.trans_remove().iter()
+            .map(|pkg| pkg.name().to_string()).collect();
+        let explicit_names: BTreeSet<&str> = packages.iter().map(String::as_str).collect();
+        let remove: Vec<_> = self.alpm.trans_remove().iter()
+            .filter(|pkg| explicit_names.contains(pkg.name()))
+            .map(|pkg| PkgFromAlpm(pkg).into()).collect();
+        let cascade: Vec<_> = self.alpm.trans_remove().iter()
+            .filter(|pkg| !explicit_names.contains(pkg.name()))
+            .map(|pkg| PkgFromAlpm(pkg).into()).collect();
 
         let mut required_by = std::collections::HashMap::new();
         for pkg in self.alpm.trans_remove().iter() {
@@ -222,7 +294,8 @@ impl DbHandle {
             }
         }
 
-        preview.cascade.extend(cascade);
+        preview.remove = remove;
+        preview.cascade = cascade;
         preview.required_by = required_by;
         self.alpm.trans_release().ok();
         Ok(())
@@ -230,33 +303,54 @@ impl DbHandle {
 
     /// Execute the staged transaction.
     pub fn commit(&mut self, preview: &super::transaction::Preview) -> Result<String, String> {
-        self.alpm
-            .trans_init(alpm::TransFlag::NO_LOCK)
-            .map_err(|e| e.to_string())?;
-
-        for pkg_info in preview.install.iter().chain(preview.reinstall.iter()) {
-            if let Some(pkg) = self
-                .alpm
-                .syncdbs()
-                .iter()
-                .find_map(|db| db.pkg(pkg_info.name.as_bytes()).ok())
-            {
-                self.alpm.trans_add_pkg(pkg).map_err(|e| e.to_string())?;
+        if preview.system_upgrade {
+            run_pacman(&["-Syu", "--noconfirm"])?;
+        } else if !preview.install.is_empty() || !preview.reinstall.is_empty() {
+            let packages: Vec<&str> = preview.install.iter().chain(&preview.reinstall)
+                .filter(|pkg| pkg.source == "repo")
+                .map(|pkg| pkg.name.as_str()).collect();
+            if packages.is_empty() {
+                return Err("AUR installation is not supported by this application".into());
             }
-        }
-
-        for pkg_info in &preview.remove {
-            if let Ok(pkg) = self.alpm.localdb().pkg(pkg_info.name.as_bytes()) {
-                self.alpm.trans_remove_pkg(&pkg).map_err(|e| e.to_string())?;
+            let mut args = vec!["-S", "--needed", "--noconfirm", "--"];
+            args.extend(packages);
+            run_pacman(&args)?;
+        } else if !preview.remove.is_empty() || !preview.cascade.is_empty() {
+            let expected: BTreeSet<&str> = preview.all_removing().into_iter().map(|pkg| pkg.name.as_str()).collect();
+            if expected.len() != preview.remove.len() + preview.cascade.len() {
+                return Err("Reviewed removal contains duplicate package names".into());
             }
+            let mut args = vec!["-R", "--noconfirm", "--"];
+            args.extend(expected);
+            run_pacman(&args)?;
+        } else {
+            return Err("The reviewed transaction contains no supported changes".into());
         }
-
-        self.alpm.trans_prepare().map_err(|e| format!("Prepare error: {e}"))?;
-        self.alpm.trans_commit().map_err(|e| format!("Commit error: {e}"))?;
-        self.alpm.trans_release().ok();
-
+        self.reload()?;
         Ok("Transaction completed successfully".into())
     }
+
+    fn reload(&mut self) -> Result<(), String> {
+        self.alpm = Self::new()?.alpm;
+        Ok(())
+    }
+}
+
+fn privileged_pacman(args: &[&str]) -> Result<std::process::Output, String> {
+    Command::new("pkexec").arg("pacman").args(args).output()
+        .or_else(|_| Command::new("sudo").arg("pacman").args(args).output())
+        .map_err(|e| format!("Could not start privileged pacman: {e}"))
+}
+
+fn run_pacman(args: &[&str]) -> Result<(), String> {
+    let output = privileged_pacman(args)?;
+    if output.status.success() { Ok(()) } else { Err(command_error("Package transaction failed", &output)) }
+}
+
+fn command_error(label: &str, output: &std::process::Output) -> String {
+    let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    if detail.is_empty() { format!("{label} (exit {})", output.status) }
+    else { format!("{label}: {detail}") }
 }
 
 // ── Conversions ─────────────────────────────────────────────────────────────
@@ -272,7 +366,7 @@ impl<'a> From<PkgFromAlpm<'a>> for PackageInfo {
             description: pkg.desc().unwrap_or("").to_string(),
             source: "repo".to_string(),
             repo: pkg.db().map(|d| d.name().to_string()).unwrap_or_default(),
-            installed: true,
+            installed: false,
             size: pkg.size() as u64,
             installed_at: pkg.install_date().unwrap_or(0),
             reason: Some(match pkg.reason() {
@@ -280,6 +374,7 @@ impl<'a> From<PkgFromAlpm<'a>> for PackageInfo {
                 PackageReason::Depend => "dependency",
             }
             .to_string()),
+            groups: pkg.groups().iter().map(|group| group.to_string()).collect(),
             ..Default::default()
         }
     }
@@ -300,6 +395,8 @@ impl Default for PackageInfo {
             votes: None,
             aur_version: None,
             out_of_date: None,
+            groups: Vec::new(),
+            protected: false,
         }
     }
 }
@@ -329,4 +426,8 @@ pub struct PackageInfo {
     pub aur_version: Option<String>,
     #[serde(default)]
     pub out_of_date: Option<bool>,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub protected: bool,
 }

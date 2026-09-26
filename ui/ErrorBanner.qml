@@ -1,6 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import "Theme.js" as T
+import QtQuick.Layouts 1.15
 
 // ErrorBanner — non-intrusive error notification at the top.
 Rectangle {
@@ -9,46 +9,46 @@ Rectangle {
     property string message: ""
 
     implicitHeight: 44
-    radius: T.radius_md
+    radius: theme.radius_md
     color: Qt.rgba(0.953, 0.545, 0.659, 0.18)
     border.width: 1
-    border.color: T.danger
+    border.color: theme.danger
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: T.space_md
-        anchors.rightMargin: T.space_xs
-        spacing: T.space_sm
+        anchors.leftMargin: theme.space_md
+        anchors.rightMargin: theme.space_xs
+        spacing: theme.space_sm
 
         Text {
             text: "⚠"
-            color: T.danger
-            font.family: T.font_family
-            font.pixelSize: T.subhead_size
-            font.weight: T.weight_bold
+            color: theme.danger
+            font.family: theme.font_family
+            font.pixelSize: theme.subhead_size
+            font.weight: theme.weight_bold
         }
 
         Text {
             text: message
-            color: T.danger
-            font.family: T.font_family
-            font.pixelSize: T.small_size
+            color: theme.danger
+            font.family: theme.font_family
+            font.pixelSize: theme.small_size
             Layout.fillWidth: true
             elide: Text.ElideRight
         }
 
         Rectangle {
             width: 28; height: 28
-            radius: T.radius_md
+            radius: theme.radius_md
             color: closeHover.containsMouse ? Qt.rgba(0.953, 0.545, 0.659, 0.3) : "transparent"
 
             Text {
                 anchors.centerIn: parent
                 text: "✕"
-                color: T.danger
-                font.family: T.font_family
-                font.pixelSize: T.body_size
-                font.weight: T.weight_bold
+                color: theme.danger
+                font.family: theme.font_family
+                font.pixelSize: theme.body_size
+                font.weight: theme.weight_bold
             }
             MouseArea {
                 id: closeHover

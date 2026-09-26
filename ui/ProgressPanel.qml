@@ -1,7 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "Theme.js" as T
 
 // ProgressPanel — modal overlay while a transaction is running.
 Rectangle {
@@ -16,25 +15,26 @@ Rectangle {
     Rectangle {
         anchors.centerIn: parent
         width: 360; height: 140
-        radius: T.radius_xl
-        color: T.surface_elevated
+        radius: theme.radius_xl
+        color: theme.surface_elevated
         border.width: 1
-        border.color: T.divider
+        border.color: theme.divider
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: T.space_lg
-            spacing: T.space_md
+            anchors.margins: theme.space_lg
+            spacing: theme.space_md
 
             Text {
                 text: root.title
-                color: T.foreground
-                font.family: T.font_family
-                font.pixelSize: T.subhead_size
-                font.weight: T.weight_bold
+                color: theme.foreground
+                font.family: theme.font_family
+                font.pixelSize: theme.subhead_size
+                font.weight: theme.weight_bold
             }
 
             ProgressBar {
+                id: progressBar
                 Layout.fillWidth: true
                 from: 0; to: 1
                 indeterminate: root.progress < 0
@@ -42,21 +42,21 @@ Rectangle {
 
                 background: Rectangle {
                     implicitHeight: 4
-                    color: T.surface
+                    color: theme.surface
                     radius: 2
                 }
                 contentItem: Item {
                     Rectangle {
-                        width: parent.width * (parent.indeterminate
+                        width: parent.width * (progressBar.indeterminate
                                                 ? 0.3
-                                                : (parent.visualPosition * parent.width))
+                                                : progressBar.visualPosition)
                         height: 4
                         radius: 2
-                        color: T.accent
+                        color: theme.accent
 
                         SequentialAnimation on x {
                             loops: Animation.Infinite
-                            running: parent.parent.indeterminate
+                            running: progressBar.indeterminate
                             PropertyAnimation { to: parent.width * 0.7; duration: 800 }
                             PropertyAnimation { to: 0;              duration: 0 }
                         }
@@ -66,9 +66,9 @@ Rectangle {
 
             Text {
                 text: root.detail
-                color: T.foreground_muted
-                font.family: T.font_family
-                font.pixelSize: T.small_size
+                color: theme.foreground_muted
+                font.family: theme.font_family
+                font.pixelSize: theme.small_size
                 Layout.fillWidth: true
                 elide: Text.ElideMiddle
             }

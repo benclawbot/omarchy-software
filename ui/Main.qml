@@ -1,7 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "Theme.js" as T
 
 Window {
     id: root
@@ -12,19 +11,24 @@ Window {
     visible: true
     flags: Qt.FramelessWindowHint
     title: "Omarchy Software"
-    color: T.background
+    color: theme.background
+
+    Component.onCompleted: {
+        if (bridge.page !== undefined) bridge.page = "installed"
+        if (bridge.loadInstalled) bridge.loadInstalled("all")
+    }
 
     // ── Title bar ─────────────────────────────────────────────────────────────
     Rectangle {
         id: titleBar
         anchors { top: parent.top; left: parent.left; right: parent.right }
-        height: T.titlebar_height
-        color: T.surface
+        height: theme.titlebar_height
+        color: theme.surface
 
         // Bottom border
         Rectangle {
             anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
-            height: 1; color: T.divider
+            height: 1; color: theme.divider
         }
 
         // Drag region — middle of title bar
@@ -44,9 +48,9 @@ Window {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: T.space_lg
-            anchors.rightMargin: T.space_sm
-            spacing: T.space_md
+            anchors.leftMargin: theme.space_lg
+            anchors.rightMargin: theme.space_sm
+            spacing: theme.space_md
 
             Image {
                 source: "omarchy-logo.svg"
@@ -58,105 +62,79 @@ Window {
 
             Text {
                 text: "Software"
-                color: T.foreground
-                font.family: T.font_family
-                font.pixelSize: T.subhead_size
-                font.weight: T.weight_medium
+                color: theme.foreground
+                font.family: theme.font_family
+                font.pixelSize: theme.subhead_size
+                font.weight: theme.weight_medium
             }
 
             Item { Layout.fillWidth: true; Layout.preferredWidth: 20 }
 
             TabBar {
                 id: tabBar
+                currentIndex: 2
                 Layout.fillWidth: false
-                background: Rectangle { color: "transparent" }
+                height: 36
+                padding: 3
+                background: Rectangle {
+                    radius: theme.radius_md
+                    color: theme.background
+                    border.width: 1
+                    border.color: theme.divider
+                }
 
                 TabButton {
                     text: "Updates"
-                    width: 90
+                    width: 88
+                    height: 30
                     contentItem: Text {
                         text: parent.text
-                        color: tabBar.currentIndex === 0 ? T.foreground : T.foreground_dim
-                        font.family: T.font_family
-                        font.pixelSize: T.body_size
-                        font.weight: tabBar.currentIndex === 0 ? T.weight_medium : T.weight_normal
+                        color: tabBar.currentIndex === 0 ? theme.foreground : theme.foreground_dim
+                        font.family: theme.font_family
+                        font.pixelSize: theme.body_size
+                        font.weight: tabBar.currentIndex === 0 ? theme.weight_medium : theme.weight_normal
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     background: Rectangle {
-                        color: "transparent"
-                        Rectangle {
-                            anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
-                            height: 2
-                            color: T.accent
-                            visible: tabBar.currentIndex === 0
-                        }
+                        radius: theme.radius_sm
+                        color: tabBar.currentIndex === 0 ? theme.surface_elevated : "transparent"
                     }
                 }
                 TabButton {
-                    text: "Browse"
-                    width: 90
+                    text: "Install"
+                    width: 88
+                    height: 30
                     contentItem: Text {
                         text: parent.text
-                        color: tabBar.currentIndex === 1 ? T.foreground : T.foreground_dim
-                        font.family: T.font_family
-                        font.pixelSize: T.body_size
-                        font.weight: tabBar.currentIndex === 1 ? T.weight_medium : T.weight_normal
+                        color: tabBar.currentIndex === 1 ? theme.foreground : theme.foreground_dim
+                        font.family: theme.font_family
+                        font.pixelSize: theme.body_size
+                        font.weight: tabBar.currentIndex === 1 ? theme.weight_medium : theme.weight_normal
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     background: Rectangle {
-                        color: "transparent"
-                        Rectangle {
-                            anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
-                            height: 2
-                            color: T.accent
-                            visible: tabBar.currentIndex === 1
-                        }
+                        radius: theme.radius_sm
+                        color: tabBar.currentIndex === 1 ? theme.surface_elevated : "transparent"
                     }
                 }
                 TabButton {
-                    text: "Installed"
+                    text: "Remove"
                     width: 100
+                    height: 30
                     contentItem: Text {
                         text: parent.text
-                        color: tabBar.currentIndex === 2 ? T.foreground : T.foreground_dim
-                        font.family: T.font_family
-                        font.pixelSize: T.body_size
-                        font.weight: tabBar.currentIndex === 2 ? T.weight_medium : T.weight_normal
+                        color: tabBar.currentIndex === 2 ? theme.foreground : theme.foreground_dim
+                        font.family: theme.font_family
+                        font.pixelSize: theme.body_size
+                        font.weight: tabBar.currentIndex === 2 ? theme.weight_medium : theme.weight_normal
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
                     background: Rectangle {
-                        color: "transparent"
-                        Rectangle {
-                            anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
-                            height: 2
-                            color: T.accent
-                            visible: tabBar.currentIndex === 2
-                        }
-                    }
-                }
-                TabButton {
-                    text: "Cache"
-                    width: 90
-                    contentItem: Text {
-                        text: parent.text
-                        color: tabBar.currentIndex === 3 ? T.foreground : T.foreground_dim
-                        font.family: T.font_family
-                        font.pixelSize: T.body_size
-                        font.weight: tabBar.currentIndex === 3 ? T.weight_medium : T.weight_normal
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    background: Rectangle {
-                        color: "transparent"
-                        Rectangle {
-                            anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
-                            height: 2
-                            color: T.accent
-                            visible: tabBar.currentIndex === 3
-                        }
+                        radius: theme.radius_sm
+                        color: tabBar.currentIndex === 2 ? theme.surface_elevated : "transparent"
                     }
                 }
             }
@@ -167,15 +145,15 @@ Window {
             Rectangle {
                 id: closeButton
                 width: 28; height: 28
-                radius: T.radius_md
-                color: closeMouse.containsMouse ? T.danger : "transparent"
+                radius: theme.radius_md
+                color: closeMouse.containsMouse ? theme.danger : "transparent"
                 Text {
                     anchors.centerIn: parent
                     text: "✕"
-                    color: closeMouse.containsMouse ? "#1e1e2e" : T.foreground_dim
-                    font.family: T.font_family
-                    font.pixelSize: T.body_size
-                    font.weight: T.weight_bold
+                    color: closeMouse.containsMouse ? "#1e1e2e" : theme.foreground_dim
+                    font.family: theme.font_family
+                    font.pixelSize: theme.body_size
+                    font.weight: theme.weight_bold
                 }
                 MouseArea {
                     id: closeMouse
@@ -199,13 +177,38 @@ Window {
         // Content stack
         StackLayout {
             anchors.fill: parent
-            anchors.topMargin: T.space_md
+            anchors.topMargin: theme.space_sm
             currentIndex: tabBar.currentIndex
 
             UpdatesView  { id: updatesView }
             BrowseView   { id: browseView }
             InstalledView { id: installedView }
-            CacheView    { id: cacheView }
+        }
+
+        Connections {
+            target: bridge
+            ignoreUnknownSignals: true
+            function onPreviewReady(preview) { previewPane.show(preview) }
+            function onOperationFinished(message) { previewPane.hide(); progressPanel.visible = false }
+            function onError(message) { errorBanner.visible = true; errorBanner.message = message }
+        }
+
+        Connections {
+            target: previewPane
+            function onApplyRequested(preview) { bridge.commit(preview) }
+            function onCancelRequested() { bridge.cancelPreview() }
+        }
+
+        Connections {
+            target: tabBar
+            function onCurrentIndexChanged() {
+                if (bridge.page !== undefined) bridge.page = ["updates", "browse", "installed"][tabBar.currentIndex]
+                if (bridge.setSelected) bridge.setSelected([])
+                installedView.selectedNames = []
+                if (tabBar.currentIndex === 0 && bridge.checkUpdates) bridge.checkUpdates()
+                if (tabBar.currentIndex === 2) installedView.refreshPackages()
+                if (tabBar.currentIndex === 1) browseView.runSearch(browseView.searchText)
+            }
         }
 
         // Preview pane (overlays content)
@@ -215,11 +218,9 @@ Window {
                 bottom: parent.bottom
                 left: parent.left; right: parent.right
             }
-            anchors.leftMargin: T.space_md
-            anchors.rightMargin: T.space_md
-            anchors.bottomMargin: T.space_md
-            height: visible ? implicitHeight : 0
-            visible: height > 0
+            anchors.leftMargin: theme.space_md
+            anchors.rightMargin: theme.space_md
+            anchors.bottomMargin: theme.space_md
         }
 
         // Error banner (overlays content)
@@ -229,8 +230,8 @@ Window {
                 top: parent.top
                 left: parent.left; right: parent.right
             }
-            anchors.leftMargin: T.space_md
-            anchors.rightMargin: T.space_md
+            anchors.leftMargin: theme.space_md
+            anchors.rightMargin: theme.space_md
             z: 9
             visible: false
         }

@@ -1,6 +1,5 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import "Theme.js" as T
 
 // StyledButton — consistent button styling.
 // Variants: "primary" (accent fill), "secondary" (muted fill),
@@ -12,33 +11,33 @@ Rectangle {
     property bool primary: variant === "primary"
     property bool danger:  variant === "danger"
     property bool ghost:   variant === "ghost"
-
     signal clicked()
 
     implicitWidth: Math.max(80, label.implicitWidth + 28)
-    implicitHeight: T.button_height
-    radius: T.radius_md
+    implicitHeight: theme.button_height
+    radius: theme.radius_md
+    opacity: enabled ? 1 : 0.45
     color: {
-        if (ghost)   return hover.containsMouse ? T.surface_elevated : "transparent"
-        if (primary) return hover.containsMouse ? T.accent_hover : T.accent
-        if (danger)  return hover.containsMouse ? T.danger  : T.surface_strong
-        return hover.containsMouse ? T.surface_elevated : T.surface
+        if (ghost)   return hover.containsMouse ? theme.surface_elevated : "transparent"
+        if (primary) return hover.containsMouse ? theme.accent_hover : theme.accent
+        if (danger)  return hover.containsMouse ? theme.danger  : theme.surface_strong
+        return hover.containsMouse ? theme.surface_elevated : theme.surface
     }
     border.width: ghost ? 1 : 0
-    border.color: ghost ? T.divider : "transparent"
+    border.color: ghost ? theme.divider : "transparent"
 
     Text {
         id: label
         anchors.centerIn: parent
         text: root.text
-        font.family: T.font_family
-        font.pixelSize: T.body_size
-        font.weight: root.primary || root.danger ? T.weight_bold : T.weight_medium
+        font.family: theme.font_family
+        font.pixelSize: theme.body_size
+        font.weight: root.primary || root.danger ? theme.weight_bold : theme.weight_medium
         color: {
-            if (root.ghost)   return hover.containsMouse ? T.foreground : T.foreground_muted
-            if (root.primary) return T.background
-            if (root.danger)  return T.foreground
-            return T.foreground
+            if (root.ghost)   return hover.containsMouse ? theme.foreground : theme.foreground_muted
+            if (root.primary) return theme.background
+            if (root.danger)  return theme.foreground
+            return theme.foreground
         }
     }
 
@@ -46,7 +45,8 @@ Rectangle {
         id: hover
         anchors.fill: parent
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: root.clicked()
+        enabled: root.enabled
+        cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+        onClicked: if (root.enabled) root.clicked()
     }
 }
