@@ -15,18 +15,21 @@ Rectangle {
     Row {
         id: sourceChips
         anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-        leftPadding: 10; spacing: 6
+        x: 10; spacing: 6
         property string current: "all"
 
         Repeater {
             model: ["all", "repo", "aur"]
             delegate: Rectangle {
+                id: chip
                 radius: 4; height: 22
+                width: label.implicitWidth + 16
                 color: sourceChips.current === modelData ? theme.accent : theme.muted
                 opacity: sourceChips.current === modelData ? 0.2 : 1.0
                 anchors.verticalCenter: parent.verticalCenter
 
                 Text {
+                    id: label
                     anchors.centerIn: parent
                     text: modelData === "all" ? "All" : modelData === "repo" ? "Repos" : "AUR"
                     color: sourceChips.current === modelData ? theme.accent : theme.dark_foreground
@@ -35,7 +38,6 @@ Rectangle {
                 }
 
                 MouseArea { anchors.fill: parent; onClicked: sourceChips.current = modelData }
-                leftPadding: 8; rightPadding: 8
             }
         }
     }

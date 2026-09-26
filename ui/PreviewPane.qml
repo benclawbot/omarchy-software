@@ -12,8 +12,8 @@ Rectangle {
     // ── Header ─────────────────────────────────────────────────────────────
     Row {
         anchors { top: parent.top; left: parent.left; right: parent.right }
-        topPadding: 10; bottomPadding: 6
-        leftPadding: 12; rightPadding: 12
+        anchors.margins: 12
+        height: 38
 
         Text {
             text: "Review changes"
@@ -25,22 +25,24 @@ Rectangle {
         Item { Layout.fillWidth: true }
 
         Button {
+            id: cancelPreviewButton
             text: "Cancel"
             flat: true; anchors.verticalCenter: parent.verticalCenter
             onClicked: bridge.cancelPreview()
             contentItem: Text {
-                text: parent.text; color: theme.dark_foreground
+                text: cancelPreviewButton.text; color: theme.dark_foreground
                 font.family: "monospace"; font.pixelSize: 12
             }
         }
 
         Button {
+            id: applyPreviewButton
             text: "Apply"
             anchors.verticalCenter: parent.verticalCenter
             rightPadding: 4
             onClicked: bridge.commit(previewData)
             contentItem: Text {
-                text: parent.text; color: theme.background
+                text: applyPreviewButton.text; color: theme.background
                 font.family: "monospace"; font.pixelSize: 12; font.weight: Font.Bold
             }
             background: Rectangle {
@@ -59,14 +61,13 @@ Rectangle {
             top: parent.top; bottom: actionBar.top
             left: parent.left; right: parent.right
         }
-        topPadding: 38
+        anchors.topMargin: 38
         clip: true
 
         model: ListModel { id: previewModel }
 
         delegate: Row {
             width: changeList.width - 24
-            leftPadding: 12; rightPadding: 12
             spacing: 8
             height: 28
 
@@ -87,14 +88,15 @@ Rectangle {
             Text {
                 text: model.name
                 color: theme.foreground; font.family: "monospace"; font.pixelSize: 12
-                anchors.verticalCenter: parent.verticalCenter; flex: 2
+                anchors.verticalCenter: parent.verticalCenter
+                width: changeList.width * 0.55
                 elide: Text.ElideRight
             }
 
             Text {
                 text: model.detail
                 color: theme.dark_foreground; font.family: "monospace"; font.pixelSize: 11
-                anchors.verticalCenter: parent.verticalCenter; flex: 1
+                anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideRight
             }
 
@@ -111,7 +113,8 @@ Rectangle {
     Row {
         id: actionBar
         anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
-        topPadding: 8; bottomPadding: 10; leftPadding: 12; rightPadding: 12
+        anchors.leftMargin: 12; anchors.rightMargin: 12
+        height: 34
 
         Text {
             text: {

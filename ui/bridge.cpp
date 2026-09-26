@@ -1,6 +1,8 @@
 #include "bridge.h"
 #include <QAbstractItemModel>
 #include <QClipboard>
+#include <QDir>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -17,12 +19,24 @@ Bridge::Bridge(QObject* parent)
           "omarchy-software", "preferences")
     , m_clock()
 {
-    // Start the Rust worker
-    m_worker.setProgram("omarchy-software-core");
+    // Locate the Rust worker. Try adjacent to the GUI binary (development),
+    // then the system install path.
+    QString adjacent =
+        QCoreApplication::applicationDirPath() + "/omarchy-software-core";
+    QString installed =
+        QDir(QCoreApplication::applicationDirPath())
+            .absoluteFilePath(
+                "../lib/omarchy-software/omarchy-software-core");
+    m_worker.setProgram(QFileInfo::exists(adjacent) ? adjacent : installed);
     m_worker.setProcessChannelMode(QProcess::SeparateChannels);
     m_worker.start();
 
-    connect(&m_worker, &QProcess::readyReadStandardError, this, &Bridge::receive);
+    // Worker writes JSON responses on stdout; tracing logs on stderr.
+    connect(&m_worker, &QProcess::readyReadStandardOutput, this, &Bridge::receive);
+    // Drain stderr so the OS pipe buffer doesn't fill and stall the worker.
+    connect(&m_worker, &QProcess::readyReadStandardError, this, [this]() {
+        m_worker.readAllStandardError();
+    });
     connect(&m_worker, &QProcess::finished, this, [this](int code, QProcess::ExitStatus) {
         if (code != 0) {
             message("Worker exited with code " + QString::number(code));
@@ -38,12 +52,26 @@ Bridge::Bridge(QObject* parent)
 }
 
 Bridge::~Bridge() {
-    send(QVariantMap{{"op", "quit"}});
-    m_worker.waitForFinished(1000);
+    m_timer.stop();
+    m_timeout.stop();
+
+    if (m_worker.state() == QProcess::Starting) {
+        m_worker.waitForStarted(1000);
+    }
+    if (m_worker.state() == QProcess::Running) {
+        send(QVariantMap{{"op", "quit"}});
+        if (m_worker.waitForFinished(1000)) return;
+
+        m_worker.terminate();
+        if (m_worker.waitForFinished(500)) return;
+
+        m_worker.kill();
+        m_worker.waitForFinished(1000);
+    }
 }
 
 void Bridge::receive() {
-    QByteArray data = m_worker.readAllStandardError();
+    QByteArray data = m_worker.readAllStandardOutput();
     if (data.isEmpty()) return;
 
     m_buffer.append(data);

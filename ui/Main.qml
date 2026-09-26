@@ -2,10 +2,13 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-Rectangle {
+Window {
     id: root
+    width: 900
+    height: 640
+    visible: true
+    flags: Qt.FramelessWindowHint
     color: theme.background
-    radius: 12
 
     // ── Drag region ────────────────────────────────────────────────────────────
     MouseArea {
@@ -46,19 +49,20 @@ Rectangle {
             Layout.preferredWidth: contentWidth + 16
             background: Rectangle { color: "transparent" }
 
-            TabButton { text: "Updates"; tab: "updates" }
-            TabButton { text: "Browse"; tab: "browse" }
-            TabButton { text: "Installed"; tab: "installed" }
-            TabButton { text: "Cache"; tab: "cache" }
+            TabButton { text: "Updates" }
+            TabButton { text: "Browse" }
+            TabButton { text: "Installed" }
+            TabButton { text: "Cache" }
         }
 
         Button {
+            id: closeButton
             text: "×"
             flat: true
             onClicked: Qt.quit()
             Layout.rightMargin: 8
             contentItem: Text {
-                text: parent.text
+                text: closeButton.text
                 color: theme.foreground
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -70,9 +74,9 @@ Rectangle {
     Row {
         id: legend
         anchors { top: titleBar.bottom; left: parent.left; right: parent.right }
-        topPadding: 6
-        bottomPadding: 4
-        leftPadding: 12
+        y: titleBar.height
+        height: 26
+        x: 12
         spacing: 16
 
         Repeater {
@@ -113,7 +117,7 @@ Rectangle {
             top: searchBar.bottom; bottom: previewPane.top
             left: parent.left; right: parent.right
         }
-        topPadding: 8; bottomPadding: 8
+        anchors.topMargin: 8; anchors.bottomMargin: 8
         currentIndex: tabBar.currentIndex
 
         UpdatesView  { id: updatesView }
@@ -145,7 +149,4 @@ Rectangle {
         z: 9
         visible: false
     }
-
-    // ── Theme ────────────────────────────────────────────────────────────────
-    Theme { id: themeJS }
 }

@@ -7,7 +7,7 @@ Rectangle {
 
     Column {
         anchors.fill: parent
-        leftPadding: 12; rightPadding: 12; spacing: 8
+        x: 12; width: parent.width - 24; spacing: 8
 
         // Filter bar
         Row {
@@ -23,9 +23,10 @@ Rectangle {
                         color: installedFilter === modelData ? theme.accent : theme.muted
                         opacity: installedFilter === modelData ? 0.2 : 1.0
                         anchors.verticalCenter: parent.verticalCenter
-                        leftPadding: 8; rightPadding: 8
+                        width: chipLabel.implicitWidth + 16
 
                         Text {
+                            id: chipLabel
                             anchors.centerIn: parent
                             text: modelData
                             color: installedFilter === modelData ? theme.accent : theme.dark_foreground
@@ -49,11 +50,12 @@ Rectangle {
 
             // Sort
             Button {
+                id: sortButton
                 text: "▼ Size"
                 flat: true; anchors.verticalCenter: parent.verticalCenter
                 onClicked: sortMenu.open()
                 contentItem: Text {
-                    text: parent.text; color: theme.dark_foreground
+                    text: sortButton.text; color: theme.dark_foreground
                     font.family: "monospace"; font.pixelSize: 11
                 }
                 Menu {
@@ -66,23 +68,25 @@ Rectangle {
 
             // Remove selected button
             Button {
+                id: removeSelectedButton
                 text: "Remove selected"
                 enabled: selectedCount > 0
                 visible: selectionMode
                 onClicked: bridge.queueRemove(selectedPackages)
                 contentItem: Text {
-                    text: parent.text; color: parent.enabled ? theme.red : theme.muted
+                    text: removeSelectedButton.text; color: removeSelectedButton.enabled ? theme.red : theme.muted
                     font.family: "monospace"; font.pixelSize: 11
                 }
             }
 
             // Toggle selection mode
             Button {
+                id: selectionModeButton
                 text: selectionMode ? "Done" : "Select…"
                 flat: true; anchors.verticalCenter: parent.verticalCenter
                 onClicked: selectionMode = !selectionMode
                 contentItem: Text {
-                    text: parent.text; color: theme.accent
+                    text: selectionModeButton.text; color: theme.accent
                     font.family: "monospace"; font.pixelSize: 11
                 }
             }

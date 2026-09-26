@@ -90,12 +90,13 @@ Rectangle {
 
         // Cancel button
         Button {
+            id: cancelOperationButton
             text: "Cancel operation"
             anchors.horizontalCenter: parent.horizontalCenter
             flat: true
             onClicked: bridge.cancel()
             contentItem: Text {
-                text: parent.text; color: theme.red
+                text: cancelOperationButton.text; color: theme.red
                 font.family: "monospace"; font.pixelSize: 12
             }
         }
@@ -103,5 +104,4 @@ Rectangle {
 
     property string progressLabel: ""
     property string logOutput: ""
-    property bool visible: false
 }

@@ -50,6 +50,7 @@ qt_add_executable(omarchy-software
     ui/main.cpp
     ui/bridge.cpp
     ui/bridge.h
+    ui/qmlresources.h
 )
 
 set(SOFTWARE_QML
@@ -94,6 +95,16 @@ install(FILES packaging/bindings.lua.example
 
 include(CTest)
 if(BUILD_TESTING)
-    # Bridge tests are not yet implemented — placeholder for future.
-    message(STATUS "BUILD_TESTING=ON but no bridge tests yet")
+    add_executable(qml-resource-test
+        tests/qml_resource_test.cpp
+        ui/qmlresources.h
+    )
+    qt_add_resources(qml-resource-test qml_smoke_resources
+        PREFIX "/qml-smoke"
+        FILES ${SOFTWARE_QML}
+    )
+    target_include_directories(qml-resource-test PRIVATE ${CMAKE_SOURCE_DIR}/ui)
+    target_link_libraries(qml-resource-test PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::QuickControls2)
+    add_test(NAME qml-startup-smoke COMMAND qml-resource-test)
+    set_tests_properties(qml-startup-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

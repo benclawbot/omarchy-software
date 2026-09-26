@@ -9,7 +9,7 @@ Rectangle {
     Row {
         id: colHeaders
         anchors { top: parent.top; left: parent.left; right: parent.right }
-        leftPadding: 12; rightPadding: 12
+        x: 12; width: parent.width - 24
         height: 24
         spacing: 8
 
@@ -21,8 +21,8 @@ Rectangle {
                 id: selectAll
                 anchors.centerIn: parent
                 onCheckedChanged: {
-                    if (checked) view.selectAll()
-                    else view.clearSelection()
+                    for (let i = 0; i < packageModel.count; ++i)
+                        packageModel.setProperty(i, "selected", checked)
                 }
             }
         }
@@ -30,7 +30,7 @@ Rectangle {
         ThinLabel { text: "Package";  flex: 3; isHeader: true }
         ThinLabel { text: "Version";  flex: 2; isHeader: true }
         ThinLabel { text: "Source";   flex: 1; isHeader: true }
-        ThinLabel { text: "Size";     flex: 1; isHeader: true; alignment: Qt.AlignRight }
+        ThinLabel { text: "Size";     flex: 1; isHeader: true; horizontalAlignment: Text.AlignRight }
     }
 
     Rectangle {
@@ -45,7 +45,7 @@ Rectangle {
             top: colHeaders.bottom; bottom: parent.bottom
             left: parent.left; right: parent.right
         }
-        topPadding: 4
+        anchors.topMargin: 4
         clip: true
 
         // Stagger-in animation when list loads

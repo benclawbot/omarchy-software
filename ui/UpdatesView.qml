@@ -7,7 +7,7 @@ Rectangle {
 
     Column {
         anchors.fill: parent
-        leftPadding: 12; rightPadding: 12
+        x: 12; width: parent.width - 24
         spacing: 12
 
         // Summary card
@@ -35,22 +35,24 @@ Rectangle {
                 Item { Layout.fillWidth: true }
 
                 Button {
+                    id: refreshButton
                     text: "Refresh"
                     flat: true; anchors.verticalCenter: parent.verticalCenter
                     onClicked: bridge.refresh()
                     contentItem: Text {
-                        text: parent.text; color: theme.accent
+                        text: refreshButton.text; color: theme.accent
                         font.family: "monospace"; font.pixelSize: 12
                     }
                 }
 
                 Button {
+                    id: installAllButton
                     text: "Install all"
                     anchors.verticalCenter: parent.verticalCenter
                     enabled: updatesCount > 0
                     onClicked: queueAllUpdates()
                     contentItem: Text {
-                        text: parent.text; color: theme.background
+                        text: installAllButton.text; color: theme.background
                         font.family: "monospace"; font.pixelSize: 12; font.weight: Font.Bold
                     }
                     background: Rectangle {
@@ -63,14 +65,13 @@ Rectangle {
 
         // Updates list
         ListView {
-            width: parent.width; flex: 1
+            width: parent.width; height: parent.height - 76
             clip: true
 
             model: ListModel { id: updatesModel }
 
             delegate: Row {
-                width: updatesList.width - 24
-                leftPadding: 0; rightPadding: 0
+                width: parent.width - 24
                 height: 44; spacing: 8
 
                 Rectangle {
@@ -81,7 +82,8 @@ Rectangle {
                 }
 
                 Column {
-                    anchors.verticalCenter: parent.verticalCenter; flex: 3
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - 180
                     spacing: 2
 
                     Text {
@@ -101,7 +103,7 @@ Rectangle {
                 Text {
                     text: model.size
                     color: theme.dark_foreground; font.family: "monospace"; font.pixelSize: 11
-                    anchors.verticalCenter: parent.verticalCenter; flex: 1
+                    anchors.verticalCenter: parent.verticalCenter
                 }
             }
 

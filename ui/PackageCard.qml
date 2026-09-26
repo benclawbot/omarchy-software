@@ -72,7 +72,7 @@ Rectangle {
 
         // Package name + description
         Column {
-            flex: 3
+            width: parent.width * 0.45
             anchors.verticalCenter: parent.verticalCenter
             spacing: 1
 
@@ -101,21 +101,23 @@ Rectangle {
         Text {
             text: card.version
             color: theme.dark_foreground; font.family: "monospace"; font.pixelSize: 12
-            anchors.verticalCenter: parent.verticalCenter; flex: 2
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width * 0.2
             elide: Text.ElideRight
         }
 
         // Source badge
         SourceBadge {
             source: card.source; repo: card.repo
-            anchors.verticalCenter: parent.verticalCenter; flex: 1
+            anchors.verticalCenter: parent.verticalCenter
         }
 
         // Size
         Text {
             text: card.size
             color: theme.dark_foreground; font.family: "monospace"; font.pixelSize: 12
-            anchors.verticalCenter: parent.verticalCenter; flex: 1
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width * 0.15
             horizontalAlignment: Text.AlignRight
         }
     }

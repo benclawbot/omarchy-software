@@ -26,7 +26,8 @@ Rectangle {
             text: message
             color: theme.red; font.family: "monospace"; font.pixelSize: 12
             anchors.verticalCenter: parent.verticalCenter
-            wrapMode: Text.Wrap; flex: 1
+            wrapMode: Text.Wrap
+            width: parent.width - 56
         }
 
         Button {

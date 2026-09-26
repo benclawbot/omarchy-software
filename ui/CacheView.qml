@@ -43,10 +43,11 @@ Rectangle {
             spacing: 12
 
             Button {
+                id: keepLastButton
                 text: "Keep last install"
                 onClicked: bridge.cleanCache("keep_last")
                 contentItem: Text {
-                    text: parent.text; color: theme.foreground
+                    text: keepLastButton.text; color: theme.foreground
                     font.family: "monospace"; font.pixelSize: 12
                 }
                 background: Rectangle {
@@ -56,10 +57,11 @@ Rectangle {
             }
 
             Button {
+                id: cleanAllButton
                 text: "Clean all cache"
                 onClicked: confirmCleanAll.open()
                 contentItem: Text {
-                    text: parent.text; color: theme.red
+                    text: cleanAllButton.text; color: theme.red
                     font.family: "monospace"; font.pixelSize: 12
                 }
                 background: Rectangle {
@@ -69,11 +71,16 @@ Rectangle {
             }
         }
 
-        MessageDialog {
+        Dialog {
             id: confirmCleanAll
+            width: 440
             title: "Clean all cache?"
-            text: "This will delete all cached packages. They will need to be re-downloaded on reinstall."
             standardButtons: Dialog.Ok | Dialog.Cancel
+            contentItem: Text {
+                text: "This will delete all cached packages. They will need to be re-downloaded on reinstall."
+                wrapMode: Text.Wrap
+                color: theme.foreground
+            }
             onAccepted: bridge.cleanCache("all")
         }
     }
