@@ -1,0 +1,6 @@
+/build/
+/cargo/
+Cargo.lock
+*.tmp
+.clangd
+.compile_commands.json

@@ -1,0 +1,3 @@
+-- Hyprland keybinding example — add to ~/.config/hypr/bindings.lua
+-- Opens Omarchy Software with Super + Shift + U
+o.bind("SUPER + SHIFT + U", "Software", "omarchy-software")
