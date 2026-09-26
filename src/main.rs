@@ -1,5 +1,5 @@
 //! omarchy-software-core — Omarchy Software
-//! Command-line worker that speaks JSON over stdin/stdout.
+//! Command-line worker: JSON over stdin/stdout.
 //! Started by the Qt GUI; the two processes communicate over a Unix socket.
 
 mod alpm_db;
@@ -9,21 +9,17 @@ mod process;
 mod theme;
 mod transaction;
 
-use alpm_db::Db;
+use alpm_db::DbHandle;
 use serde_json::{json, Value};
-use std::collections::HashSet;
 use std::io::{self, BufRead, Read, Write};
-use std::sync::Arc;
-use parking_lot::Mutex;
 
 fn main() {
-    // Initialise tracing to XDG_STATE_HOME/omarchy-software/logs
     if let Err(e) = theme::init_logging() {
         eprintln!("Cannot initialise logging: {e}");
     }
 
-    let db = match Db::new() {
-        Ok(db) => Arc::new(Mutex::new(db)),
+    let mut db = match DbHandle::new() {
+        Ok(db) => db,
         Err(e) => {
             eprintln!("Cannot initialise package database: {e}");
             std::process::exit(1);
@@ -36,7 +32,7 @@ fn main() {
         eprintln!("Cannot install worker shutdown handler: {e}");
     }
 
-    let mut cache = CACHE::default();
+    let mut cache = Cache::default();
     let stdin = io::stdin();
     let mut stdout = io::BufWriter::new(io::stdout());
     let mut input = stdin.lock();
@@ -47,7 +43,7 @@ fn main() {
         };
 
         let response = match serde_json::from_str::<Value>(&line) {
-            Ok(req) => handle(&req, &db, &theme, &mut cache),
+            Ok(req) => handle(&req, &mut db, &theme, &mut cache),
             Err(_) => json!({"kind": "error", "message": "Malformed request"}),
         };
 
@@ -59,11 +55,11 @@ fn main() {
 
 // ── Request routing ─────────────────────────────────────────────────────────
 
-fn handle(req: &Value, db: &Arc<Mutex<Db>>, theme: &theme::Theme, cache: &mut Cache) -> Value {
+fn handle(req: &Value, db: &mut DbHandle, theme: &theme::Theme, cache: &mut Cache) -> Value {
     match req["op"].as_str().unwrap_or("") {
         "search" => {
             let query = req["query"].as_str().unwrap_or("");
-            let source = req["source"].as_str().unwrap_or("all"); // all | repo | aur
+            let source = req["source"].as_str().unwrap_or("all");
             search(db, query, source)
         }
         "installed" => installed(db, req),
@@ -73,16 +69,15 @@ fn handle(req: &Value, db: &Arc<Mutex<Db>>, theme: &theme::Theme, cache: &mut Ca
         "preview_remove" => preview_remove(db, req),
         "commit" => commit(db, req),
         "cancel" => {
-            process::cancel();
+            db.interrupt();
             json!({"kind": "action", "results": [{"ok": true, "message": "Operation cancelled"}]})
         }
         "cancel_preview" => {
-            // Drop any pending preview from cache
             cache.preview = None;
             json!({"kind": "action", "results": [{"ok": true, "message": "Preview cleared"}]})
         }
         "cache_clean" => cache_clean(req),
-        "aur_info" => aur::info(req["packages"].as_array().cloned().unwrap_or_default()),
+        "aur_info" => aur_info(req),
         "theme" => json!({
             "kind": "theme",
             "colors": serde_json::to_value(theme).unwrap()
@@ -96,9 +91,7 @@ fn handle(req: &Value, db: &Arc<Mutex<Db>>, theme: &theme::Theme, cache: &mut Ca
 
 // ── Operations ───────────────────────────────────────────────────────────────
 
-fn search(db: &Arc<Mutex<Db>>, query: &str, source: &str) -> Value {
-    let db = db.lock();
-
+fn search(db: &DbHandle, query: &str, source: &str) -> Value {
     let mut results: Vec<Value> = Vec::new();
 
     if source != "aur" {
@@ -116,22 +109,20 @@ fn search(db: &Arc<Mutex<Db>>, query: &str, source: &str) -> Value {
     }
 
     if source != "repo" {
-        // AUR search is blocking; run in a blocking task to avoid blocking the thread
-        if let Ok(aur_results) = std::thread::scope(|s| {
+        // AUR search is blocking — run in a thread pool to avoid blocking
+        if let Ok(Ok(aur_results)) = std::thread::scope(|s| {
             s.spawn(|| aur::search(query)).join()
         }) {
-            if let Ok(results) = aur_results {
-                for pkg in results {
-                    results.push(json!({
-                        "name": pkg.name,
-                        "version": pkg.version,
-                        "description": pkg.description,
-                        "source": "aur",
-                        "repo": "AUR",
-                        "installed": false,
-                        "votes": pkg.votes,
-                    }));
-                }
+            for pkg in aur_results {
+                results.push(json!({
+                    "name": pkg.name,
+                    "version": pkg.version,
+                    "description": pkg.description,
+                    "source": "aur",
+                    "repo": "AUR",
+                    "installed": false,
+                    "votes": pkg.votes,
+                }));
             }
         }
     }
@@ -139,39 +130,38 @@ fn search(db: &Arc<Mutex<Db>>, query: &str, source: &str) -> Value {
     json!({"kind": "search_results", "results": results})
 }
 
-fn installed(db: &Arc<Mutex<Db>>, req: &Value) -> Value {
-    let db = db.lock();
-    let filter = req["filter"].as_str().unwrap_or("all"); // all | explicit | dependency | orphan
+fn installed(db: &DbHandle, req: &Value) -> Value {
+    let filter = req["filter"].as_str().unwrap_or("all");
     let sort = req["sort"].as_str().unwrap_or("name");
     let reverse = req["reverse"].as_bool().unwrap_or(false);
 
     let packages = db.installed_packages(filter, sort, reverse);
     let total_size: u64 = packages.iter().map(|p| p.size).sum();
+    let package_values: Vec<Value> = packages.into_iter().map(|p| serde_json::to_value(p).unwrap()).collect();
 
     json!({
         "kind": "installed",
-        "packages": packages,
-        "total_count": packages.len(),
+        "packages": package_values,
+        "total_count": package_values.len(),
         "total_size": total_size,
     })
 }
 
-fn updates(db: &Arc<Mutex<Db>>, cache: &mut Cache) -> Value {
-    // Cache updates for 5 minutes to avoid hammering the mirror on every refresh
+fn updates(db: &DbHandle, cache: &mut Cache) -> Value {
     if let Some(cached) = &cache.updates {
         if cached.0.elapsed().as_secs() < 300 {
             return cached.1.clone();
         }
     }
 
-    let db = db.lock();
     let (repos, aur) = db.check_updates();
+    let total = repos.len() + aur.len();
 
     let result = json!({
         "kind": "updates",
-        "repos": repos,
-        "aur": aur,
-        "total": repos.len() + aur.len(),
+        "repos": repos.into_iter().map(|p| serde_json::to_value(p).unwrap()).collect::<Vec<Value>>(),
+        "aur": aur.into_iter().map(|p| serde_json::to_value(p).unwrap()).collect::<Vec<Value>>(),
+        "total": total,
         "timestamp": std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -182,59 +172,54 @@ fn updates(db: &Arc<Mutex<Db>>, cache: &mut Cache) -> Value {
     result
 }
 
-fn refresh(db: &Arc<Mutex<Db>>, cache: &mut Cache) -> Value {
-    let db = db.lock();
+fn refresh(db: &mut DbHandle, cache: &mut Cache) -> Value {
     match db.refresh() {
         Ok(msg) => {
-            cache.updates = None; // invalidate cache
+            cache.updates = None;
             json!({"kind": "action", "results": [{"ok": true, "message": msg}]})
         }
         Err(e) => json!({"kind": "error", "message": e}),
     }
 }
 
-fn preview_install(db: &Arc<Mutex<Db>>, req: &Value) -> Value {
+fn preview_install(db: &mut DbHandle, req: &Value) -> Value {
     let packages: Vec<String> = serde_json::from_value(req["packages"].clone())
         .unwrap_or_default();
     let sources: Vec<String> = serde_json::from_value(req["sources"].clone())
-        .unwrap_or_default(); // "repo" or "aur"
+        .unwrap_or_default();
 
     if packages.is_empty() {
         return json!({"kind": "error", "message": "No packages specified"});
     }
 
-    let mut to_install = Vec::new();
-    let mut to_build = Vec::new();
-
-    for (i, name) in packages.iter().enumerate() {
-        let source = sources.get(i).map(|s| s.as_str()).unwrap_or("repo");
-        if source == "aur" {
-            to_build.push(name.clone());
-        } else {
-            to_install.push(name.clone());
-        }
-    }
-
-    let db = db.lock();
     let mut preview = transaction::Preview::new();
 
-    if !to_install.is_empty() {
-        if let Err(e) = db.preview_install(&to_install, &mut preview) {
+    let repo_pkgs: Vec<String> = packages
+        .iter()
+        .zip(sources.iter())
+        .filter(|(_, s)| s.as_str() != "aur")
+        .map(|(n, _)| n.clone())
+        .collect();
+
+    if !repo_pkgs.is_empty() {
+        if let Err(e) = db.preview_install(&repo_pkgs, &mut preview) {
             return json!({"kind": "error", "message": e});
         }
     }
 
-    drop(db); // release lock before potentially blocking AUR fetch
+    let aur_pkgs: Vec<String> = packages
+        .iter()
+        .zip(sources.iter())
+        .filter(|(_, s)| s.as_str() == "aur")
+        .map(|(n, _)| n.clone())
+        .collect();
 
-    if !to_build.is_empty() {
-        // AUR info fetch is blocking
-        if let Ok(aur_info) = std::thread::scope(|s| {
-            s.spawn(|| aur::info_by_name(&to_build)).join()
+    if !aur_pkgs.is_empty() {
+        if let Ok(Ok(aur_info)) = std::thread::scope(|s| {
+            s.spawn(|| aur::info_by_name(&aur_pkgs)).join()
         }) {
-            if let Ok(aur_info) = aur_info {
-                for pkg in aur_info {
-                    preview.add_install_aur(&pkg);
-                }
+            for pkg in aur_info {
+                preview.add_install_aur(&pkg);
             }
         }
     }
@@ -242,7 +227,7 @@ fn preview_install(db: &Arc<Mutex<Db>>, req: &Value) -> Value {
     json!({"kind": "preview", "preview": serde_json::to_value(&preview).unwrap()})
 }
 
-fn preview_remove(db: &Arc<Mutex<Db>>, req: &Value) -> Value {
+fn preview_remove(db: &mut DbHandle, req: &Value) -> Value {
     let packages: Vec<String> = serde_json::from_value(req["packages"].clone())
         .unwrap_or_default();
 
@@ -250,7 +235,6 @@ fn preview_remove(db: &Arc<Mutex<Db>>, req: &Value) -> Value {
         return json!({"kind": "error", "message": "No packages specified"});
     }
 
-    let db = db.lock();
     let mut preview = transaction::Preview::new();
     if let Err(e) = db.preview_remove(&packages, &mut preview) {
         return json!({"kind": "error", "message": e});
@@ -259,30 +243,25 @@ fn preview_remove(db: &Arc<Mutex<Db>>, req: &Value) -> Value {
     json!({"kind": "preview", "preview": serde_json::to_value(&preview).unwrap()})
 }
 
-fn commit(db: &Arc<Mutex<Db>>, req: &Value) -> Value {
-    let preview_json = match &req["preview"] {
-        Value::Object(map) => map.clone(),
+fn commit(db: &mut DbHandle, req: &Value) -> Value {
+    let preview_map = match req["preview"].as_object() {
+        Some(m) => m.clone(),
         _ => return json!({"kind": "error", "message": "Invalid preview"}),
     };
 
-    let preview: transaction::Preview = match serde_json::from_value(serde_json::Value::Object(preview_json)) {
+    let preview: transaction::Preview = match serde_json::from_value(serde_json::Value::Object(preview_map)) {
         Ok(p) => p,
         Err(e) => return json!({"kind": "error", "message": format!("Cannot parse preview: {e}")}),
     };
 
-    let db = db.lock();
     match db.commit(&preview) {
-        Ok(out) => json!({
-            "kind": "commit_result",
-            "ok": true,
-            "output": out,
-        }),
+        Ok(out) => json!({"kind": "commit_result", "ok": true, "output": out}),
         Err(e) => json!({"kind": "error", "message": e}),
     }
 }
 
 fn cache_clean(req: &Value) -> Value {
-    let mode = req["mode"].as_str().unwrap_or("keep_last"); // "all" | "keep_last"
+    let mode = req["mode"].as_str().unwrap_or("keep_last");
     match transaction::clean_cache(mode) {
         Ok((freed, units)) => json!({
             "kind": "cache_cleaned",
@@ -290,6 +269,29 @@ fn cache_clean(req: &Value) -> Value {
             "freed_units": units,
         }),
         Err(e) => json!({"kind": "error", "message": e}),
+    }
+}
+
+fn aur_info(req: &Value) -> Value {
+    let packages: Vec<String> = req["packages"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v["name"].as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if packages.is_empty() {
+        return json!({"kind": "aur_info", "packages": []});
+    }
+
+    match aur::info_by_name(&packages) {
+        Ok(infos) => {
+            let vals: Vec<Value> = infos.into_iter().map(|p| serde_json::to_value(p).unwrap()).collect();
+            json!({"kind": "aur_info", "packages": vals})
+        }
+        Err(e) => json!({"kind": "aur_info", "packages": [], "error": e}),
     }
 }
 
@@ -307,7 +309,7 @@ fn write_response(output: &mut impl Write, response: &Value) -> io::Result<()> {
         )
         .ok();
     }
-    output.write_all(&buffer.bytes)?;
+    output.write_all(buffer.bytes())?;
     output.write_all(b"\n")?;
     output.flush()
 }

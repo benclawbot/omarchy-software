@@ -2,9 +2,7 @@
 //! Uses the AUR RPC API at https://aur.archlinux.org/rpc.php
 
 use crate::alpm_db::PackageInfo;
-use reqwest::blocking::Client;
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use serde::Deserialize;
 
 const AUR_RPC: &str = "https://aur.archlinux.org/rpc.php";
 const USER_AGENT: &str = "omarchy-software/0.1";
@@ -27,8 +25,6 @@ struct RpcPackage {
     NumVotes: Option<i32>,
     #[serde(default)]
     OutOfDate: Option<i64>,
-    #[serde(default)]
-    LastModified: Option<i64>,
 }
 
 impl RpcPackage {
@@ -47,10 +43,10 @@ impl RpcPackage {
     }
 }
 
-fn client() -> Client {
-    Client::builder()
+fn client() -> reqwest::blocking::Client {
+    reqwest::blocking::Client::builder()
         .user_agent(USER_AGENT)
-        .timeout(Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .expect("AUR HTTP client")
 }
@@ -71,34 +67,10 @@ pub fn search(query: &str) -> Result<Vec<PackageInfo>, String> {
     Ok(resp.results.into_iter().map(|p| p.into_info()).collect())
 }
 
-pub fn info(packages: Vec<serde_json::Value>) -> serde_json::Value {
-    let names: Vec<String> = packages
-        .iter()
-        .filter_map(|v| v["name"].as_str().map(String::from))
-        .collect();
-
-    if names.is_empty() {
-        return serde_json::json!({"kind": "aur_info", "packages": []});
-    }
-
-    // AUR info endpoint accepts comma-separated names, max 4000 chars
-    let arg = names.join(",");
-    let url = format!("{}?v=5&type=info&arg={}", AUR_RPC, urlencoding(&arg));
-
-    match client().get(&url).send() {
-        Ok(resp) => {
-            if let Ok(rpc) = resp.json::<RpcResponse>() {
-                let infos: Vec<PackageInfo> = rpc.results.into_iter().map(|p| p.into_info()).collect();
-                serde_json::json!({"kind": "aur_info", "packages": infos})
-            } else {
-                serde_json::json!({"kind": "aur_info", "packages": [], "error": "Parse error"})
-            }
-        }
-        Err(e) => serde_json::json!({"kind": "aur_info", "packages": [], "error": e.to_string()}),
-    }
-}
-
 pub fn info_by_name(names: &[String]) -> Result<Vec<PackageInfo>, String> {
+    if names.is_empty() {
+        return Ok(Vec::new());
+    }
     let arg = names.join(",");
     let url = format!("{}?v=5&type=info&arg={}", AUR_RPC, urlencoding(&arg));
 

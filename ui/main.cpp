@@ -2,8 +2,12 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickWindow>
+#include <QSGRendererInterface>
 #include <QtQuickControls2>
 #include <QSurfaceFormat>
+
+#include "bridge.h"
 
 int main(int argc, char* argv[]) {
     QGuiApplication::setApplicationName("Omarchy Software");
@@ -28,13 +32,13 @@ int main(int argc, char* argv[]) {
     const QUrl url(QStringLiteral("qrc:/Main.qml"));
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreated,
-        &app, [&url, &bridge](QObject* obj, const QUrl&) {
+        &app, [&url, &bridge, &engine](QObject* obj, const QUrl&) {
             if (obj) {
                 // Let main.qml know the window for dragging
                 QQmlContext* ctx = engine.rootContext();
                 ctx->setContextProperty("mainWindow", obj);
                 // Load theme from the worker
-                bridge->send(QVariantMap{{"op", "theme"}});
+                bridge->requestTheme();
             }
         },
         Qt::QueuedConnection);

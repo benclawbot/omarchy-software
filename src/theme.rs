@@ -1,7 +1,6 @@
 //! Theme adapter — reads the active Omarchy palette and exposes it to the QML layer.
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use tracing::info;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -69,6 +69,9 @@ public:
     Q_INVOKABLE void floatPanel(int width, int height);
     Q_INVOKABLE void active(bool visible);
 
+    // Public wrapper used by main.cpp to trigger initial theme load
+    void requestTheme() { send(QVariantMap{{"op", "theme"}}); }
+
     // Helpers exposed to QML
     Q_INVOKABLE QString formatSize(double bytes) const;
     Q_INVOKABLE void copyToClipboard(const QString& text) const;
@@ -78,6 +81,7 @@ signals:
     void statusChanged();
     void busyChanged();
     void selectionChanged();
+    void preferencesChanged();
     void previewReady(const QVariantMap& preview);
     void operationFinished(const QString& message);
     void error(const QString& message);

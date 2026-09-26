@@ -3,7 +3,6 @@
 use crate::alpm_db::PackageInfo;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-use std::time::Duration;
 
 /// A staged transaction — the diff the user approves before Apply.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

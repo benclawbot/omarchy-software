@@ -194,6 +194,13 @@ void Bridge::finish() {
     emit busyChanged();
 }
 
+void Bridge::handleTimeout() {
+    // Worker didn't respond within the timeout window.
+    m_busy = false;
+    emit busyChanged();
+    emit error("Worker timeout — no response from omarchy-software-core");
+}
+
 // ── QML invokables ─────────────────────────────────────────────────────────
 
 void Bridge::setPage(const QString& page) {
