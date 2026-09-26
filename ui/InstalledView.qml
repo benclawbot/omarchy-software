@@ -1,109 +1,72 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "Theme.js" as T
 
-Rectangle {
-    color: "transparent"
+Item {
+    id: root
 
-    Column {
+    property string filter: "all"  // all | explicit | dependency | orphan
+
+    ColumnLayout {
         anchors.fill: parent
-        x: 12; width: parent.width - 24; spacing: 8
+        anchors.margins: T.space_lg
+        spacing: T.space_md
 
-        // Filter bar
-        Row {
-            width: parent.width; spacing: 8
+        // Page header
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: T.space_md
+
+            ColumnLayout {
+                spacing: T.space_xs
+                Layout.fillWidth: true
+
+                Text {
+                    text: "Installed"
+                    color: T.foreground
+                    font.family: T.font_family
+                    font.pixelSize: T.headline_size
+                    font.weight: T.weight_bold
+                }
+                Text {
+                    text: "Manage packages currently on this system"
+                    color: T.foreground_muted
+                    font.family: T.font_family
+                    font.pixelSize: T.small_size
+                }
+            }
 
             // Filter chips
             Row {
-                spacing: 6
-                Repeater {
-                    model: ["All", "Explicit", "Dependencies", "Orphans"]
-                    delegate: Rectangle {
-                        radius: 4; height: 24
-                        color: installedFilter === modelData ? theme.accent : theme.muted
-                        opacity: installedFilter === modelData ? 0.2 : 1.0
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: chipLabel.implicitWidth + 16
-
-                        Text {
-                            id: chipLabel
-                            anchors.centerIn: parent
-                            text: modelData
-                            color: installedFilter === modelData ? theme.accent : theme.dark_foreground
-                            font.family: "monospace"; font.pixelSize: 11
-                            font.weight: installedFilter === modelData ? Font.Bold : Font.Normal
-                        }
-
-                        MouseArea { anchors.fill: parent; onClicked: installedFilter = modelData }
-                    }
+                spacing: T.space_xs
+                StyledChip {
+                    text: "All"
+                    selected: root.filter === "all"
+                    onClicked: root.filter = "all"
                 }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            // Total size
-            Text {
-                text: installedCount + " installed · " + installedSize
-                color: theme.dark_foreground; font.family: "monospace"; font.pixelSize: 11
-                anchors.verticalCenter: parent.verticalCenter
-            }
-
-            // Sort
-            Button {
-                id: sortButton
-                text: "▼ Size"
-                flat: true; anchors.verticalCenter: parent.verticalCenter
-                onClicked: sortMenu.open()
-                contentItem: Text {
-                    text: sortButton.text; color: theme.dark_foreground
-                    font.family: "monospace"; font.pixelSize: 11
+                StyledChip {
+                    text: "Explicit"
+                    selected: root.filter === "explicit"
+                    onClicked: root.filter = "explicit"
                 }
-                Menu {
-                    id: sortMenu
-                    MenuItem { text: "Sort by Name"; onClicked: bridge.sortInstalled("name") }
-                    MenuItem { text: "Sort by Size"; onClicked: bridge.sortInstalled("size") }
-                    MenuItem { text: "Sort by Date"; onClicked: bridge.sortInstalled("date") }
+                StyledChip {
+                    text: "Dependencies"
+                    selected: root.filter === "dependency"
+                    onClicked: root.filter = "dependency"
                 }
-            }
-
-            // Remove selected button
-            Button {
-                id: removeSelectedButton
-                text: "Remove selected"
-                enabled: selectedCount > 0
-                visible: selectionMode
-                onClicked: bridge.queueRemove(selectedPackages)
-                contentItem: Text {
-                    text: removeSelectedButton.text; color: removeSelectedButton.enabled ? theme.red : theme.muted
-                    font.family: "monospace"; font.pixelSize: 11
-                }
-            }
-
-            // Toggle selection mode
-            Button {
-                id: selectionModeButton
-                text: selectionMode ? "Done" : "Select…"
-                flat: true; anchors.verticalCenter: parent.verticalCenter
-                onClicked: selectionMode = !selectionMode
-                contentItem: Text {
-                    text: selectionModeButton.text; color: theme.accent
-                    font.family: "monospace"; font.pixelSize: 11
+                StyledChip {
+                    text: "Orphans"
+                    accent: T.warning
+                    selected: root.filter === "orphan"
+                    onClicked: root.filter = "orphan"
                 }
             }
         }
 
-        // Package list (same component as Browse)
         PackageList {
-            id: installedList
-            anchors { left: parent.left; right: parent.right; top: parent.top }
-            anchors.topMargin: 36
+            Layout.fillWidth: true
+            Layout.fillHeight: true
         }
     }
-
-    property string installedFilter: "All"
-    property int installedCount: 0
-    property string installedSize: ""
-    property int selectedCount: 0
-    property var selectedPackages: []
-    property bool selectionMode: false
 }

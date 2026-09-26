@@ -1,89 +1,100 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import "Theme.js" as T
 
 Rectangle {
     id: root
-    height: 38
-    color: theme.darker_background
-    radius: 8
-    anchors { left: parent.left; right: parent.right; leftMargin: 12; rightMargin: 12 }
+    color: "transparent"
+    implicitHeight: T.input_height
 
-    property string text: input.text
-    property string sourceFilter: sourceChips.current
+    property alias text: input.text
+    property alias placeholder: input.placeholderText
+    property string source: "all"  // "all" | "repo" | "aur" | "cachyos"
 
-    // Source filter chips
-    Row {
-        id: sourceChips
-        anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-        x: 10; spacing: 6
-        property string current: "all"
+    signal search(string query)
+    signal sourceChanged(string source)
 
-        Repeater {
-            model: ["all", "repo", "aur"]
-            delegate: Rectangle {
-                id: chip
-                radius: 4; height: 22
-                width: label.implicitWidth + 16
-                color: sourceChips.current === modelData ? theme.accent : theme.muted
-                opacity: sourceChips.current === modelData ? 0.2 : 1.0
-                anchors.verticalCenter: parent.verticalCenter
+    RowLayout {
+        anchors.fill: parent
+        spacing: T.space_md
+
+        // Search input
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: T.input_height
+            radius: T.radius_md
+            color: T.surface
+            border.width: input.activeFocus ? 1 : 0
+            border.color: T.accent
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: T.space_md
+                anchors.rightMargin: T.space_md
+                spacing: T.space_sm
 
                 Text {
-                    id: label
-                    anchors.centerIn: parent
-                    text: modelData === "all" ? "All" : modelData === "repo" ? "Repos" : "AUR"
-                    color: sourceChips.current === modelData ? theme.accent : theme.dark_foreground
-                    font.family: "monospace"; font.pixelSize: 11
-                    font.weight: sourceChips.current === modelData ? Font.Bold : Font.Normal
+                    text: "⌕"
+                    color: T.foreground_dim
+                    font.family: T.font_family
+                    font.pixelSize: T.body_size
                 }
 
-                MouseArea { anchors.fill: parent; onClicked: sourceChips.current = modelData }
+                TextField {
+                    id: input
+                    Layout.fillWidth: true
+                    placeholderText: "Search packages…"
+                    placeholderTextColor: T.foreground_subtle
+                    background: Item {}  // strip default
+                    color: T.foreground
+                    font.family: T.font_family
+                    font.pixelSize: T.body_size
+                    selectByMouse: true
+                    onAccepted: root.search(text)
+
+                    Keys.onEscapePressed: text = ""
+                }
+
+                Text {
+                    visible: text.length > 0
+                    text: "✕"
+                    color: T.foreground_dim
+                    font.family: T.font_family
+                    font.pixelSize: T.body_size
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: input.text = ""
+                    }
+                }
             }
         }
-    }
 
-    Rectangle {
-        anchors.left: sourceChips.right; anchors.right: clearButton.left
-        anchors.verticalCenter: parent.verticalCenter
-        height: parent.height - 8
-        color: theme.background; radius: 4
-
-        TextInput {
-            id: input
-            anchors.fill: parent
-            anchors.leftMargin: 10; anchors.rightMargin: 10
-            font.family: "monospace"; font.pixelSize: 13
-            color: theme.foreground; selectionColor: theme.selection
-            verticalAlignment: Text.AlignVCenter
-            focus: true
-            inputMethodHints: Qt.ImhNoPredictiveText
-
-            // Debounce search
-            onTextChanged: searchTimer.restart()
+        // Source filter chips
+        StyledChip {
+            text: "All"
+            selected: root.source === "all"
+            onClicked: { root.source = "all"; root.sourceChanged("all") }
         }
-    }
-
-    Timer {
-        id: searchTimer
-        interval: 250; repeat: false
-        onTriggered: root.doSearch()
-    }
-
-    Button {
-        id: clearButton
-        anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-        rightPadding: 8
-        visible: input.text.length > 0
-        flat: true
-        onClicked: { input.text = ""; root.doSearch() }
-        contentItem: Text {
-            text: "✕"
-            color: theme.muted; font.pixelSize: 12
-            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+        StyledChip {
+            text: "Repo"
+            accent: T.source_repo
+            selected: root.source === "repo"
+            onClicked: { root.source = "repo"; root.sourceChanged("repo") }
         }
-    }
-
-    function doSearch() {
-        bridge.search(input.text, sourceChips.current)
+        StyledChip {
+            text: "AUR"
+            accent: T.source_aur
+            selected: root.source === "aur"
+            onClicked: { root.source = "aur"; root.sourceChanged("aur") }
+        }
+        StyledChip {
+            text: "CachyOS"
+            accent: T.source_cachyos
+            selected: root.source === "cachyos"
+            onClicked: { root.source = "cachyos"; root.sourceChanged("cachyos") }
+        }
     }
 }

@@ -1,90 +1,107 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "Theme.js" as T
 
-Rectangle {
-    color: "transparent"
+Item {
+    id: root
 
-    Column {
-        anchors.centerIn: parent
-        spacing: 20
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: T.space_lg
+        spacing: T.space_md
 
-        // Cache stats card
+        // Page header
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: T.space_xs
+
+            Text {
+                text: "Package cache"
+                color: T.foreground
+                font.family: T.font_family
+                font.pixelSize: T.headline_size
+                font.weight: T.weight_bold
+            }
+            Text {
+                text: "Downloaded .pkg.tar files kept by pacman"
+                color: T.foreground_muted
+                font.family: T.font_family
+                font.pixelSize: T.small_size
+            }
+        }
+
+        // Stats card
         Rectangle {
-            width: 360; height: 100
-            color: theme.lighter_background; radius: 8
+            Layout.fillWidth: true
+            implicitHeight: 84
+            radius: T.radius_lg
+            color: T.surface
+            border.width: 1
+            border.color: T.divider
 
-            Column {
-                anchors.fill: parent; anchors.margins: 16
-                spacing: 8
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: T.space_lg
+                spacing: T.space_xl
 
-                Text {
-                    text: "Package cache"
-                    color: theme.foreground; font.family: "monospace"
-                    font.pixelSize: 14; font.weight: Font.Bold
+                ColumnLayout {
+                    spacing: 2
+                    Layout.fillWidth: true
+                    Text {
+                        text: "Cached packages"
+                        color: T.foreground_subtle
+                        font.family: T.font_family
+                        font.pixelSize: T.caption_size
+                        font.weight: T.weight_bold
+                    }
+                    Text {
+                        text: "—"
+                        color: T.foreground
+                        font.family: T.font_family
+                        font.pixelSize: T.title_size
+                        font.weight: T.weight_bold
+                    }
                 }
 
-                Text {
-                    text: cacheSize + " · " + cacheCount + " files"
-                    color: theme.dark_foreground; font.family: "monospace"; font.pixelSize: 12
+                ColumnLayout {
+                    spacing: 2
+                    Layout.fillWidth: true
+                    Text {
+                        text: "Disk usage"
+                        color: T.foreground_subtle
+                        font.family: T.font_family
+                        font.pixelSize: T.caption_size
+                        font.weight: T.weight_bold
+                    }
+                    Text {
+                        text: "—"
+                        color: T.foreground
+                        font.family: T.font_family
+                        font.pixelSize: T.title_size
+                        font.weight: T.weight_bold
+                    }
                 }
 
-                Text {
-                    text: "Cached packages can be reinstalled without re-downloading"
-                    color: theme.muted; font.family: "monospace"; font.pixelSize: 11
-                    wrapMode: Text.Wrap
+                ColumnLayout {
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: T.space_sm
+
+                    StyledButton {
+                        text: "Keep last 3"
+                        variant: "secondary"
+                    }
+                    StyledButton {
+                        text: "Clear cache"
+                        variant: "danger"
+                    }
                 }
             }
         }
 
-        // Clean options
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 12
-
-            Button {
-                id: keepLastButton
-                text: "Keep last install"
-                onClicked: bridge.cleanCache("keep_last")
-                contentItem: Text {
-                    text: keepLastButton.text; color: theme.foreground
-                    font.family: "monospace"; font.pixelSize: 12
-                }
-                background: Rectangle {
-                    color: theme.muted; radius: 4; anchors.fill: parent
-                    opacity: 0.3
-                }
-            }
-
-            Button {
-                id: cleanAllButton
-                text: "Clean all cache"
-                onClicked: confirmCleanAll.open()
-                contentItem: Text {
-                    text: cleanAllButton.text; color: theme.red
-                    font.family: "monospace"; font.pixelSize: 12
-                }
-                background: Rectangle {
-                    color: theme.red; radius: 4; anchors.fill: parent
-                    opacity: 0.15
-                }
-            }
-        }
-
-        Dialog {
-            id: confirmCleanAll
-            width: 440
-            title: "Clean all cache?"
-            standardButtons: Dialog.Ok | Dialog.Cancel
-            contentItem: Text {
-                text: "This will delete all cached packages. They will need to be re-downloaded on reinstall."
-                wrapMode: Text.Wrap
-                color: theme.foreground
-            }
-            onAccepted: bridge.cleanCache("all")
+        PackageList {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
         }
     }
-
-    property string cacheSize: "—"
-    property string cacheCount: "—"
 }

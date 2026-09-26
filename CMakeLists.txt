@@ -63,6 +63,8 @@ set(SOFTWARE_QML
     ui/SearchBar.qml
     ui/SourceBadge.qml
     ui/ErrorBanner.qml
+    ui/StyledButton.qml
+    ui/StyledChip.qml
     ui/BrowseView.qml
     ui/InstalledView.qml
     ui/UpdatesView.qml

@@ -1,107 +1,77 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "Theme.js" as T
 
+// ProgressPanel — modal overlay while a transaction is running.
 Rectangle {
     id: root
-    color: theme.glass
-    radius: 12
-    anchors.fill: parent
-    z: 10
-    visible: false
 
-    // Frosted overlay
+    property string title: "Working…"
+    property string detail: ""
+    property real progress: -1  // -1 = indeterminate
+
+    color: Qt.rgba(0.07, 0.07, 0.10, 0.7)
+
     Rectangle {
-        anchors.fill: parent
-        color: theme.background
-        opacity: 0.7
-        radius: parent.radius
-    }
-
-    Column {
         anchors.centerIn: parent
-        spacing: 16
+        width: 360; height: 140
+        radius: T.radius_xl
+        color: T.surface_elevated
+        border.width: 1
+        border.color: T.divider
 
-        Text {
-            text: "Working…"
-            color: theme.foreground; font.family: "monospace"
-            font.pixelSize: 15; font.weight: Font.Medium
-            anchors.horizontalCenter: parent.horizontalCenter
-        }
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: T.space_lg
+            spacing: T.space_md
 
-        // Per-package progress dots
-        Row {
-            spacing: 6; layoutDirection: Qt.LeftToRight
-            anchors.horizontalCenter: parent.horizontalCenter
+            Text {
+                text: root.title
+                color: T.foreground
+                font.family: T.font_family
+                font.pixelSize: T.subhead_size
+                font.weight: T.weight_bold
+            }
 
-            Repeater {
-                id: dotRepeater
-                model: ListModel { id: progressDots }
+            ProgressBar {
+                Layout.fillWidth: true
+                from: 0; to: 1
+                indeterminate: root.progress < 0
+                value: root.progress >= 0 ? root.progress : 0
 
-                Rectangle {
-                    width: 10; height: 10; radius: 5
-                    color: {
-                        if (model.state === "done")    return theme.green
-                        if (model.state === "error")   return theme.red
-                        if (model.state === "running")  return theme.accent
-                        return theme.muted
-                    }
+                background: Rectangle {
+                    implicitHeight: 4
+                    color: T.surface
+                    radius: 2
+                }
+                contentItem: Item {
+                    Rectangle {
+                        width: parent.width * (parent.indeterminate
+                                                ? 0.3
+                                                : (parent.visualPosition * parent.width))
+                        height: 4
+                        radius: 2
+                        color: T.accent
 
-                    NumberAnimation on opacity {
-                        running: model.state === "running"
-                        loops: Animation.Infinite
-                        from: 1.0; to: 0.3; duration: 600
-                        easing.type: Easing.InOutQuad
+                        SequentialAnimation on x {
+                            loops: Animation.Infinite
+                            running: parent.parent.indeterminate
+                            PropertyAnimation { to: parent.width * 0.7; duration: 800 }
+                            PropertyAnimation { to: 0;              duration: 0 }
+                        }
                     }
                 }
             }
-        }
 
-        // Current operation label
-        Text {
-            text: progressLabel
-            color: theme.dark_foreground; font.family: "monospace"; font.pixelSize: 12
-            anchors.horizontalCenter: parent.horizontalCenter
-            visible: progressLabel.length > 0
-        }
-
-        // Terminal-style log output (collapsible)
-        Rectangle {
-            width: 480; height: Math.min(120, logArea.contentHeight + 16)
-            color: theme.darker_background; radius: 6
-            clip: true
-
-            Flickable {
-                id: logArea
-                anchors.fill: parent
-                anchors.margins: 8
-                contentWidth: width
-                contentHeight: logText.height
-                Text {
-                    id: logText
-                    text: logOutput
-                    color: theme.foreground; font.family: "monospace"
-                    font.pixelSize: 11; wrapMode: Text.Wrap
-                    width: parent.width
-                }
-                ScrollBar.vertical: ScrollBar { width: 4 }
-            }
-        }
-
-        // Cancel button
-        Button {
-            id: cancelOperationButton
-            text: "Cancel operation"
-            anchors.horizontalCenter: parent.horizontalCenter
-            flat: true
-            onClicked: bridge.cancel()
-            contentItem: Text {
-                text: cancelOperationButton.text; color: theme.red
-                font.family: "monospace"; font.pixelSize: 12
+            Text {
+                text: root.detail
+                color: T.foreground_muted
+                font.family: T.font_family
+                font.pixelSize: T.small_size
+                Layout.fillWidth: true
+                elide: Text.ElideMiddle
             }
         }
     }
-
-    property string progressLabel: ""
-    property string logOutput: ""
 }
