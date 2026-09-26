@@ -152,6 +152,35 @@ Item {
         spacing: theme.space_sm
         model: root.model
 
+        // ── Trackpad / mouse-wheel scroll scaling ────────────────────────
+        // Qt6's built-in Flickable wheel handling scrolls by `pixelDelta`
+        // directly for touchpad events. On a HiDPI Wayland session that
+        // gives very little motion per swipe compared to GTK or KDE
+        // panels. This handler intercepts the wheel event, scales the
+        // delta, and writes contentY directly; by accepting the event we
+        // suppress Flickable's default (smaller) handler. Mouse wheel
+        // (angleDelta) is also scaled to give ~80 px per notch.
+        WheelHandler {
+            id: scrollWheel
+            target: listView
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            property real pixelScale: 3.5
+            property real notchStep: 80.0
+            onWheel: (event) => {
+                var delta = 0
+                if (event.pixelDelta.y !== 0) {
+                    delta = event.pixelDelta.y * scrollWheel.pixelScale
+                } else if (event.angleDelta.y !== 0) {
+                    delta = (event.angleDelta.y / 120) * scrollWheel.notchStep
+                }
+                if (delta !== 0) {
+                    var maxY = Math.max(0, listView.contentHeight - listView.height)
+                    listView.contentY = Math.max(0, Math.min(maxY, listView.contentY - delta))
+                    event.accepted = true
+                }
+            }
+        }
+
         // ── Smooth scrolling tuning ────────────────────────────────────────
         // Render at integer pixel offsets to avoid sub-pixel blur while
         // scrolling. cacheBuffer is intentionally modest — on Intel iGPU
