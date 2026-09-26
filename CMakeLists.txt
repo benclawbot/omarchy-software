@@ -55,8 +55,8 @@ qt_add_executable(omarchy-software
 
 set(SOFTWARE_QML
     ui/Main.qml
-    ui/Theme.js
     ui/PackageList.qml
+    ui/FilterComboBox.qml
     ui/PackageCard.qml
     ui/PreviewPane.qml
     ui/ProgressPanel.qml
@@ -65,11 +65,12 @@ set(SOFTWARE_QML
     ui/ErrorBanner.qml
     ui/StyledButton.qml
     ui/StyledChip.qml
+    ui/StyledScrollBar.qml
     ui/BrowseView.qml
     ui/InstalledView.qml
     ui/UpdatesView.qml
-    ui/CacheView.qml
     ui/ThinLabel.qml
+    ui/Theme.qml
     ui/omarchy-logo.svg
 )
 qt_add_resources(omarchy-software qml PREFIX "/" FILES ${SOFTWARE_QML})
