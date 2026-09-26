@@ -100,7 +100,9 @@ signals:
     void searchOptionsChanged();
     void preferencesChanged();
     void previewReady(const QVariantMap& preview);
-    void operationFinished(const QString& message);
+    void operationFinished(const QString& action,
+                           const QStringList& packages,
+                           const QString& message);
     void error(const QString& message);
     void updatesAvailable(int count);
 
@@ -130,6 +132,7 @@ private:
     QVariantList m_pendingQueue;
     QVariantList m_pendingSources;
     QString m_pendingAction;
+    QStringList m_pendingPackages;
     QElapsedTimer m_clock;
     QString m_page = "installed";
     QString m_searchQuery;

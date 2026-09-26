@@ -175,7 +175,20 @@ void Bridge::handleResponse(const QVariantMap& resp) {
     if (kind == "preview") {
         m_busy = false;
         emit busyChanged();
-        emit previewReady(resp.value("preview").toMap());
+        auto preview = resp.value("preview").toMap();
+        // For the update flow we didn't know the package list at queue
+        // time — capture it from the preview so the post-commit toast can
+        // name them.
+        if (m_pendingAction == "update" && m_pendingPackages.isEmpty()) {
+            for (const auto& key : QStringList{"install", "upgrade", "remove"}) {
+                const auto entries = preview.value(key).toList();
+                for (const auto& entry : entries) {
+                    QString name = entry.toMap().value("name").toString();
+                    if (!name.isEmpty()) m_pendingPackages.append(name);
+                }
+            }
+        }
+        emit previewReady(preview);
         return;
     }
 
@@ -184,8 +197,13 @@ void Bridge::handleResponse(const QVariantMap& resp) {
         emit busyChanged();
         m_selected.clear();
         emit selectionChanged();
-        emit operationFinished(resp.value("output").toString());
-        // Refresh
+        const QString output = resp.value("output").toString();
+        const QString action = m_pendingAction;
+        const QStringList packages = m_pendingPackages;
+        m_pendingAction.clear();
+        m_pendingPackages.clear();
+        emit operationFinished(action, packages, output);
+        // Refresh the current view's list
         if (m_page == "installed") {
             loadInstalled();
         } else if (m_page == "updates") {
@@ -339,6 +357,10 @@ void Bridge::checkUpdates() {
 }
 
 void Bridge::previewUpdates() {
+    m_pendingAction = "update";
+    // Package names are filled in once the preview response arrives; see
+    // Bridge::handleResponse → "preview" branch below.
+    m_pendingPackages.clear();
     m_busy = true; emit busyChanged();
     m_status = "Preparing update review…"; emit statusChanged();
     send(QVariantMap{{"op", "preview_updates"}});
@@ -354,12 +376,16 @@ void Bridge::queueInstall(const QVariantList& packages, const QVariantList& sour
     m_pendingQueue = packages;
     m_pendingSources = sources;
     m_pendingAction = "install";
+    m_pendingPackages.clear();
+    for (const auto& value : packages) m_pendingPackages.append(value.toString());
     previewInstall(packages, sources);
 }
 
 void Bridge::queueRemove(const QVariantList& packages) {
     m_pendingQueue = packages;
     m_pendingAction = "remove";
+    m_pendingPackages.clear();
+    for (const auto& value : packages) m_pendingPackages.append(value.toString());
     previewRemove(packages);
 }
 

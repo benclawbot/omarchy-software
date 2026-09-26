@@ -71,6 +71,7 @@ set(SOFTWARE_QML
     ui/UpdatesView.qml
     ui/ThinLabel.qml
     ui/Theme.qml
+    ui/Toast.qml
     ui/omarchy-logo.svg
 )
 qt_add_resources(omarchy-software qml PREFIX "/" FILES ${SOFTWARE_QML})

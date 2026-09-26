@@ -33,6 +33,13 @@ Item {
         return 0
     }
 
+    // Bring the list back to the top after a refresh (e.g. after an
+    // install commits — the user wants to see the package they just
+    // installed now sitting at the top of the search results).
+    function scrollToTop() {
+        if (listView) listView.positionViewAtBeginning()
+    }
+
     // Column header
     Rectangle {
         id: header

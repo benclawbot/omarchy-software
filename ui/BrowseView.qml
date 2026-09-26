@@ -107,6 +107,7 @@ Item {
 
         // Results list
         PackageList {
+            id: packageList
             model: bridge.rows
             loading: bridge.busy || false
             showHeader: false
@@ -124,6 +125,18 @@ Item {
                 if (source === "aur") return
                 bridge.queueInstall([name], [source])
             }
+        }
+    }
+
+    // Bring the user back to the top of the search results whenever a
+    // package action completes on this view — so the package they just
+    // installed (or the refresh after an update) is visible at once.
+    Connections {
+        target: bridge
+        ignoreUnknownSignals: true
+        function onOperationFinished(action, packages, message) {
+            if ((action === "install" || action === "update") && packageList)
+                packageList.scrollToTop()
         }
     }
 

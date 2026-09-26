@@ -189,7 +189,11 @@ Window {
             target: bridge
             ignoreUnknownSignals: true
             function onPreviewReady(preview) { previewPane.show(preview) }
-            function onOperationFinished(message) { previewPane.hide(); progressPanel.visible = false }
+            function onOperationFinished(action, packages, message) {
+                previewPane.hide()
+                progressPanel.visible = false
+                toast.showAction(action, packages, message)
+            }
             function onError(message) { errorBanner.visible = true; errorBanner.message = message }
         }
 
@@ -243,5 +247,53 @@ Window {
             z: 10
             visible: false
         }
+
+        // Toast — transient confirmation after a package action.
+        Toast {
+            id: toast
+            anchors {
+                top: parent.top
+                horizontalCenter: parent.horizontalCenter
+                topMargin: theme.space_lg
+            }
+            z: 11
+            // Wire the action-aware formatter from the parent scope.
+            formatActionMessageFn: function(action, packages, rawOutput) {
+                return formatActionMessage(action, packages, rawOutput)
+            }
+            onDismissed: { /* auto-handled by Timer inside Toast */ }
+        }
+    }
+
+    // Translate an action kind + package list into a human-readable
+    // toast message. The detail line carries the raw pacman output
+    // for transparency when it is meaningful.
+    function formatActionMessage(action, packages, rawOutput) {
+        var names = packages || []
+        var count = names.length
+        var variant = "success"
+        if (action === "install") {
+            if (count === 0) return { text: qsTr("Package installed"), variant: variant }
+            if (count === 1) return { text: qsTr("Installed ") + names[0], variant: variant }
+            var preview = names.slice(0, 3).join(", ")
+            if (count > 3) preview += " (+" + (count - 3) + " more)"
+            return { text: qsTr("Installed ") + count + " packages", detail: preview, variant: variant }
+        }
+        if (action === "update") {
+            if (count === 0) return { text: qsTr("System is up to date"), variant: variant }
+            if (count === 1) return { text: qsTr("Updated ") + names[0], variant: variant }
+            var previewU = names.slice(0, 3).join(", ")
+            if (count > 3) previewU += " (+" + (count - 3) + " more)"
+            return { text: qsTr("Updated ") + count + " packages", detail: previewU, variant: variant }
+        }
+        if (action === "remove") {
+            if (count === 0) return { text: qsTr("Package removed"), variant: variant }
+            if (count === 1) return { text: qsTr("Removed ") + names[0], variant: variant }
+            var previewR = names.slice(0, 3).join(", ")
+            if (count > 3) previewR += " (+" + (count - 3) + " more)"
+            return { text: qsTr("Removed ") + count + " packages", detail: previewR, variant: variant }
+        }
+        if (rawOutput && rawOutput.length > 0) return { text: rawOutput, variant: variant }
+        return { text: qsTr("Done"), variant: variant }
     }
 }
