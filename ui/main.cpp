@@ -3,7 +3,9 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QQuickItem>
 #include <QSurfaceFormat>
+#include <QSGRendererInterface>
 
 #include "bridge.h"
 #include "qmlresources.h"
@@ -12,8 +14,20 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setApplicationName("Omarchy Software");
     QGuiApplication::setApplicationVersion("0.1.0");
 
+    // Force the OpenGL RHI on Wayland — on Intel iGPU Mesa the OpenGL
+    // backend is faster and more stable than the default Vulkan RHI
+    // for Qt Quick scenes with many small textures. Honour QSG_RHI_BACKEND
+    // / QT_QUICK_BACKEND if the user already set them.
+    if (qgetenv("QSG_RHI_BACKEND").isEmpty()
+        && qgetenv("QT_QUICK_BACKEND").isEmpty()) {
+        QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+    }
+
     QSurfaceFormat fmt;
     fmt.setAlphaBufferSize(8);
+    // Request vsync-friendly swap interval — without this the GPU may
+    // run as fast as possible which on iGPU can starve the compositor.
+    fmt.setSwapInterval(1);
     QSurfaceFormat::setDefaultFormat(fmt);
 
     QGuiApplication app(argc, argv);

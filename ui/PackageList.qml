@@ -154,11 +154,12 @@ Item {
 
         // ── Smooth scrolling tuning ────────────────────────────────────────
         // Render at integer pixel offsets to avoid sub-pixel blur while
-        // scrolling, and pre-instantiate delegates one viewport above and
-        // below the visible region so items are already laid out when they
-        // come into view (no first-frame hitch on long lists).
+        // scrolling. cacheBuffer is intentionally modest — on Intel iGPU
+        // under Wayland, pre-instantiating a tall stack of delegates adds
+        // real per-frame cost; 1× the viewport is the sweet spot between
+        // smooth first-appearance and low steady-state load.
         pixelAligned: true
-        cacheBuffer: Math.max(listView.height * 2, 800)
+        cacheBuffer: Math.max(listView.height, 400)
         reuseItems: true
         // Fast initial flick + long inertia glide. Qt's defaults
         // (maximumFlickVelocity 4000, flickDeceleration 500) feel sluggish

@@ -46,12 +46,11 @@ Rectangle {
     readonly property color protectedFill:     Qt.rgba(0.651, 0.678, 0.792, 0.12)
     readonly property color unsupportedFill:   Qt.rgba(theme.warning.r, theme.warning.g, theme.warning.b, 0.14)
 
-    // Layer-cached delegate for fast scrolling. The layer is invalidated
-    // automatically when any property participating in the cached paint
-    // changes (selected / hovered / state).
-    layer.enabled: true
-    layer.smooth: true
-    layer.textureSize: Qt.size(width, height)
+    // Single property so every Text element in this delegate uses the
+    // same fast native glyph path. NativeRendering skips QPainterPath
+    // tessellation per glyph, which is the largest single cost in a
+    // scrolling package list on Intel iGPU under Wayland.
+    readonly property int textRenderType: Text.NativeRendering
 
     color: theme.surface
     border.width: 0
@@ -111,6 +110,7 @@ Rectangle {
             opacity: root.selectionAllowed ? 1 : 0.42
 
             Text {
+                renderType: root.textRenderType
                 anchors.centerIn: parent
                 text: "✓"
                 color: theme.background
@@ -136,6 +136,7 @@ Rectangle {
                 spacing: theme.space_sm
 
                 Text {
+                    renderType: root.textRenderType
                     text: root.name
                     color: theme.foreground
                     font.family: theme.font_family
@@ -146,6 +147,7 @@ Rectangle {
                 }
 
                 Text {
+                    renderType: root.textRenderType
                     visible: root.version.length > 0
                     text: root.version
                     color: theme.foreground_dim
@@ -155,6 +157,7 @@ Rectangle {
             }
 
             Text {
+                renderType: root.textRenderType
                 text: root.description
                 color: theme.foreground_muted
                 font.family: theme.font_family
@@ -173,6 +176,7 @@ Rectangle {
             radius: theme.radius_sm
             color: root.unsupportedFill
             Text {
+                renderType: root.textRenderType
                 id: unsupportedLabel
                 anchors.centerIn: parent
                 text: "AUR unavailable"
@@ -191,6 +195,7 @@ Rectangle {
                  : root.updateAvailable  ? root.updateFill
                  : root.installedFill
             Text {
+                renderType: root.textRenderType
                 id: statusLabel
                 anchors.centerIn: parent
                 text: root.protectedPackage ? "Protected" : (root.updateAvailable ? "Update available" : "Installed")
