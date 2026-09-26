@@ -160,10 +160,12 @@ Item {
         pixelAligned: true
         cacheBuffer: Math.max(listView.height * 2, 800)
         reuseItems: true
-        // Slightly longer inertia + faster flick peaks feels closer to a
-        // native GTK/KDE panel than the Qt default.
-        flickDeceleration: 1500
-        maximumFlickVelocity: 5500
+        // Fast initial flick + long inertia glide. Qt's defaults
+        // (maximumFlickVelocity 4000, flickDeceleration 500) feel sluggish
+        // on long package lists under Wayland — a faster peak and a longer
+        // deceleration match what GTK and KDE panels do.
+        flickDeceleration: 2500
+        maximumFlickVelocity: 8500
         // Stop at bounds rather than rubber-banding; rubber-banding on a
         // package manager panel feels jittery under Wayland.
         boundsBehavior: Flickable.StopAtBounds

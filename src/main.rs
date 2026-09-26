@@ -77,7 +77,7 @@ fn handle(
         "preview_install" => preview_install(db, req),
         "preview_updates" => preview_updates(db),
         "preview_remove" => preview_remove(db, req, config),
-        "commit" => commit(db, req, config),
+        "commit" => commit(db, req, config, cache),
         "cancel" => {
             db.interrupt();
             json!({"kind": "action", "results": [{"ok": true, "message": "Operation cancelled"}]})
@@ -335,7 +335,7 @@ fn preview_remove(db: &mut DbHandle, req: &Value, config: &config::Config) -> Va
     json!({"kind": "preview", "preview": serde_json::to_value(&preview).unwrap()})
 }
 
-fn commit(db: &mut DbHandle, req: &Value, config: &config::Config) -> Value {
+fn commit(db: &mut DbHandle, req: &Value, config: &config::Config, cache: &mut Cache) -> Value {
     let preview_map = match req["preview"].as_object() {
         Some(m) => m.clone(),
         _ => return json!({"kind": "error", "message": "Invalid preview"}),
@@ -360,7 +360,13 @@ fn commit(db: &mut DbHandle, req: &Value, config: &config::Config) -> Value {
     }
 
     match db.commit(&preview) {
-        Ok(out) => json!({"kind": "commit_result", "ok": true, "output": out}),
+        Ok(out) => {
+            // The installed set and version table just changed, so the
+            // cached updates list is stale — drop it so the next
+            // checkUpdates() call re-queries pacman.
+            cache.updates = None;
+            json!({"kind": "commit_result", "ok": true, "output": out})
+        }
         Err(e) => json!({"kind": "error", "message": e}),
     }
 }
