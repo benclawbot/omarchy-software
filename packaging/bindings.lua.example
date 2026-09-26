@@ -1,3 +1,14 @@
--- Hyprland keybinding example — add to ~/.config/hypr/bindings.lua
--- Opens Omarchy Software with Super + Shift + U
-o.bind("SUPER + SHIFT + U", "Software", "omarchy-software")
+-- Hyprland keybindings for omarchy-software.
+-- Add these lines to your ~/.config/hypr/bindings.lua
+-- (or just run ./install.sh and it will do this for you).
+--
+-- GUI: Super + Shift + A — floating panel
+-- TUI: Super + Shift + I — ncurses launcher
+
+-- GUI: floating glass panel
+hl.unbind("SUPER + SHIFT + A")
+o.bind("SUPER + SHIFT + A", "Package Manager", "omarchy-software")
+
+-- TUI: terminal launcher (opens in your default terminal emulator)
+hl.unbind("SUPER + SHIFT + I")
+o.bind("SUPER + SHIFT + I", "Packages (TUI)", { tui = "omarchy-software-tui", focus = true })
