@@ -1,0 +1,16 @@
+[package]
+name = "omarchy-software-tui"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Tom Ballard <tcballard@proton.me>"]
+description = "Terminal launcher for omarchy-software"
+
+[[bin]]
+name = "omarchy-software-tui"
+path = "src/main.rs"
+
+[dependencies]
+alpm = "5"
+cursive = { version = "0.20", default-features = false, features = ["termion-backend"] }
+tokio = { version = "1", features = ["process"] }

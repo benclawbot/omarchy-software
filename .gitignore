@@ -1,5 +1,6 @@
 /build/
 /cargo/
+/target/
 Cargo.lock
 *.tmp
 .clangd

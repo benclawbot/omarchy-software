@@ -14,6 +14,7 @@ add_custom_command(
     COMMAND ${CARGO} build --release --locked
             --manifest-path ${CMAKE_SOURCE_DIR}/Cargo.toml
             --target-dir ${CMAKE_BINARY_DIR}/cargo
+            --package omarchy-software-core
     COMMAND ${CMAKE_COMMAND} -E copy
             ${CMAKE_BINARY_DIR}/cargo/release/omarchy-software-core
             ${CMAKE_BINARY_DIR}/omarchy-software-core
@@ -25,9 +26,24 @@ add_custom_command(
         src/theme.rs
         src/config.rs
         src/process.rs
-        Cargo.toml Cargo.lock
+        Cargo.toml
 )
 add_custom_target(core ALL DEPENDS ${CMAKE_BINARY_DIR}/omarchy-software-core)
+
+# ── TUI ─────────────────────────────────────────────────────────────────────
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/omarchy-software-tui
+    COMMAND ${CARGO} build --release --locked
+            --manifest-path ${CMAKE_SOURCE_DIR}/tui/Cargo.toml
+            --target-dir ${CMAKE_BINARY_DIR}/cargo-tui
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_BINARY_DIR}/cargo-tui/release/omarchy-software-tui
+            ${CMAKE_BINARY_DIR}/omarchy-software-tui
+    DEPENDS
+        tui/src/main.rs
+        tui/Cargo.toml
+)
+add_custom_target(tui ALL DEPENDS ${CMAKE_BINARY_DIR}/omarchy-software-tui)
 
 # ── GUI ─────────────────────────────────────────────────────────────────────
 qt_add_executable(omarchy-software
@@ -55,10 +71,12 @@ qt_add_resources(omarchy-software qml PREFIX "/" FILES ${SOFTWARE_QML})
 target_link_libraries(omarchy-software PRIVATE
     Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::QuickControls2 Qt6::Network
 )
-add_dependencies(omarchy-software core)
+add_dependencies(omarchy-software core tui)
 
 include(GNUInstallDirs)
 install(TARGETS omarchy-software RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(PROGRAMS ${CMAKE_BINARY_DIR}/omarchy-software-tui
+        DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(PROGRAMS ${CMAKE_BINARY_DIR}/omarchy-software-core
         DESTINATION lib/omarchy-software)
 install(FILES packaging/io.github.tcballard.Software.desktop

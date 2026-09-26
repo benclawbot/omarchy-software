@@ -1,3 +1,7 @@
+[workspace]
+resolver = "2"
+members = [".", "tui"]
+
 [package]
 name = "omarchy-software-core"
 version = "0.1.0"
@@ -7,12 +11,13 @@ authors = ["Tom Ballard <tcballard@proton.me>"]
 description = "Omarchy Software — a native GUI package manager for Arch Linux"
 
 [dependencies]
-alpm = "3"
-aur = "0.6"
+alpm = "5"
+aur = "0.2"
 tokio = { version = "1", features = ["rt-multi-thread", "process"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", features = ["json"] }
+toml = "0.8"
+reqwest = { version = "0.12", features = ["json", "blocking"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
