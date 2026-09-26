@@ -81,6 +81,8 @@ install(PROGRAMS ${CMAKE_BINARY_DIR}/omarchy-software-core
         DESTINATION lib/omarchy-software)
 install(FILES packaging/io.github.tcballard.Software.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES packaging/io.github.tcballard.Software.tui.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES packaging/io.github.tcballard.Software.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/omarchy-software)

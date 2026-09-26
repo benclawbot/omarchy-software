@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Omarchy Software (TUI)
+GenericName=Package Manager (Terminal)
+Comment=Terminal launcher for omarchy-software
+Exec=omarchy-software-tui
+Icon=io.github.tcballard.Software
+Terminal=true
+Type=Application
+Categories=System;PackageManager;TerminalEmulator;
+Keywords=package;pacman;aur;install;remove;software;tui;terminal;
+StartupNotify=true
+StartupWMClass=omarchy-software-tui
